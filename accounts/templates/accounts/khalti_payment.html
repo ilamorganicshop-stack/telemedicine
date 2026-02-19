@@ -31,8 +31,8 @@
         </div>
 
         <div class="bg-gray-50 rounded-lg p-6 text-center">
-            <p class="text-sm text-gray-600 mb-2">Registration Fee</p>
-            <p class="text-4xl font-bold text-indigo-600">NPR {{ registration_fee }}</p>
+            <p class="text-sm text-gray-600 mb-2">Appointment Fee</p>
+            <p class="text-4xl font-bold text-indigo-600">NPR {{ appointment_fee }}</p>
         </div>
 
         <div class="space-y-4">
@@ -72,8 +72,8 @@
         var config = {
             // Replace with your public key
             "publicKey": "{{ khalti_public_key }}",
-            "productIdentity": "patient-registration-{{ user.id }}",
-            "productName": "Patient Registration Fee",
+            "productIdentity": "patient-appointment-{{ user.id }}",
+            "productName": "Appointment Fee",
             "productUrl": window.location.origin + "{% url 'accounts:login' %}",
             "paymentPreference": [
                 "KHALTI",
@@ -136,8 +136,8 @@
         paymentButton.addEventListener('click', function(e) {
             e.preventDefault();
             // Convert NPR to paisa (Khalti uses paisa)
-            var registrationFee = parseFloat("{{ registration_fee }}");
-            var amountInPaisa = Math.round(registrationFee * 100);
+            var appointmentFee = parseFloat("{{ appointment_fee }}");
+            var amountInPaisa = Math.round(appointmentFee * 100);
             checkout.show({amount: amountInPaisa});
         });
 

@@ -573,9 +573,13 @@ def khalti_payment(request):
         if patient_profile.payment_status:
             return redirect('accounts:dashboard')
         
+        # Get appointment fee from patient's hospital
+        hospital = patient_profile.hospital
+        appointment_fee = hospital.appointment_fee if hospital else 1000.00
+        
         context = {
             'khalti_public_key': settings.KHALTI_PUBLIC_KEY,
-            'registration_fee': patient_profile.registration_fee,
+            'appointment_fee': appointment_fee,
             'user': user,
         }
         return render(request, 'accounts/khalti_payment.html', context)
