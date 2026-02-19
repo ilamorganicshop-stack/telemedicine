@@ -1,0 +1,50 @@
+{% extends 'medical/base.html' %}
+
+{% block title %}{{ hospital.name }} - Telemedicine System{% endblock %}
+
+{% block medical_content %}
+<div class="mb-6">
+    <a href="{% url 'medical:hospital_list' %}" class="text-blue-600 hover:text-blue-800 mb-4 inline-block">
+        ← Back to Hospitals
+    </a>
+    <h1 class="text-3xl font-bold text-gray-900">{{ hospital.name }}</h1>
+    <p class="text-gray-600 mt-2">{{ hospital.address }}</p>
+</div>
+
+<div class="bg-white shadow-md rounded-lg p-6 mb-6">
+    <h2 class="text-xl font-semibold mb-4">Hospital Information</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+            <p><strong>Address:</strong> {{ hospital.address }}</p>
+            <p><strong>Phone:</strong> {{ hospital.phone }}</p>
+            <p><strong>Email:</strong> {{ hospital.email }}</p>
+        </div>
+        <div>
+            {% if hospital.website %}
+                <p><strong>Website:</strong> <a href="{{ hospital.website }}" target="_blank" class="text-blue-600">{{ hospital.website }}</a></p>
+            {% endif %}
+            <p><strong>Total Doctors:</strong> {{ doctors.count }}</p>
+        </div>
+    </div>
+</div>
+
+<div class="bg-white shadow-md rounded-lg p-6">
+    <h2 class="text-xl font-semibold mb-4">Available Doctors</h2>
+    {% if doctors %}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% for doctor in doctors %}
+                <div class="border rounded-lg p-4">
+                    <h3 class="font-semibold">Dr. {{ doctor.user.first_name }} {{ doctor.user.last_name }}</h3>
+                    <p class="text-gray-600">{{ doctor.specialization }}</p>
+                    <p class="text-sm text-gray-500">{{ doctor.experience_years }} years experience</p>
+                    <a href="{% url 'medical:doctor_detail' doctor.id %}" class="text-blue-600 hover:text-blue-800 mt-2 inline-block">
+                        View Profile
+                    </a>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="text-gray-500">No doctors available at this hospital.</p>
+    {% endif %}
+</div>
+{% endblock %}

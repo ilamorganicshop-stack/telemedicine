@@ -1,0 +1,100 @@
+{% extends 'accounts/dashboard_base.html' %}
+
+{% block title %}Admin Dashboard - Telemedicine System{% endblock %}
+
+{% block dashboard_content %}
+<div class="mb-8">
+    <h2 class="text-2xl font-bold text-gray-900">Admin Dashboard</h2>
+    <p class="mt-1 text-sm text-gray-600">Manage the telemedicine system</p>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="p-5">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-blue-500 rounded-md flex items-center justify-center">
+                        <span class="text-white text-sm font-medium">U</span>
+                    </div>
+                </div>
+                <div class="ml-5 w-0 flex-1">
+                    <dl>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Total Users</dt>
+                        <dd class="text-lg font-medium text-gray-900">-</dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="p-5">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-green-500 rounded-md flex items-center justify-center">
+                        <span class="text-white text-sm font-medium">D</span>
+                    </div>
+                </div>
+                <div class="ml-5 w-0 flex-1">
+                    <dl>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Doctors</dt>
+                        <dd class="text-lg font-medium text-gray-900">-</dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="p-5">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-purple-500 rounded-md flex items-center justify-center">
+                        <span class="text-white text-sm font-medium">P</span>
+                    </div>
+                </div>
+                <div class="ml-5 w-0 flex-1">
+                    <dl>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Patients</dt>
+                        <dd class="text-lg font-medium text-gray-900">-</dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="bg-white shadow rounded-lg">
+    <div class="px-4 py-5 sm:p-6">
+        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Quick Actions</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <a href="/admin/accounts/user/add/" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700">
+                Add New User
+            </a>
+            <a href="/admin/" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                Admin Panel
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="mt-8 bg-white shadow rounded-lg">
+    <div class="px-4 py-5 sm:p-6">
+        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">System Status</h3>
+        <div class="space-y-3">
+            <div class="flex items-center justify-between">
+                <span class="text-sm font-medium text-gray-500">Database</span>
+                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Connected</span>
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-sm font-medium text-gray-500">Authentication</span>
+                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Working</span>
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-sm font-medium text-gray-500">Development Mode</span>
+                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">Active</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,79 @@
+{% extends 'accounts/super_admin_base.html' %}
+
+{% block title %}Create Hospital{% endblock %}
+
+{% block super_admin_content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-white">Create New Hospital</h1>
+        <p class="text-slate-400 mt-2">Add a new hospital to the system</p>
+    </div>
+
+    <div class="bg-white/95 text-slate-900 rounded-2xl shadow-xl p-6">
+        <form method="POST">
+            {% csrf_token %}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label for="{{ form.name.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">
+                        Hospital Name *
+                    </label>
+                    {{ form.name }}
+                    {% if form.name.errors %}
+                        <div class="text-red-500 text-sm mt-1">{{ form.name.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <div>
+                    <label for="{{ form.email.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">
+                        Email *
+                    </label>
+                    {{ form.email }}
+                    {% if form.email.errors %}
+                        <div class="text-red-500 text-sm mt-1">{{ form.email.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <div>
+                    <label for="{{ form.phone.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">
+                        Phone *
+                    </label>
+                    {{ form.phone }}
+                    {% if form.phone.errors %}
+                        <div class="text-red-500 text-sm mt-1">{{ form.phone.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <div>
+                    <label for="{{ form.website.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">
+                        Website
+                    </label>
+                    {{ form.website }}
+                    {% if form.website.errors %}
+                        <div class="text-red-500 text-sm mt-1">{{ form.website.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="md:col-span-2">
+                    <label for="{{ form.address.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-2">
+                        Address *
+                    </label>
+                    {{ form.address }}
+                    {% if form.address.errors %}
+                        <div class="text-red-500 text-sm mt-1">{{ form.address.errors }}</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="mt-6 flex flex-col gap-3 sm:flex-row">
+                <button type="submit" class="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    Create Hospital
+                </button>
+                <a href="{% url 'accounts:super_admin_dashboard' %}" class="bg-gray-300 text-gray-700 px-6 py-2 rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+

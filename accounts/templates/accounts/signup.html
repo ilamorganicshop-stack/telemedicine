@@ -1,0 +1,126 @@
+{% extends 'accounts/base.html' %}
+
+{% block title %}Sign Up - Telemedicine System{% endblock %}
+
+{% block content %}
+<div class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-md w-full space-y-8">
+        <div>
+            <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
+                Create your account
+            </h2>
+            <p class="mt-2 text-center text-sm text-gray-600">
+                Or 
+                <a href="{% url 'accounts:login' %}" class="font-medium text-indigo-600 hover:text-indigo-500">
+                    sign in to your existing account
+                </a>
+            </p>
+        </div>
+        <form class="mt-8 space-y-6" method="POST">
+            {% csrf_token %}
+            
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="id_first_name" class="block text-sm font-medium text-gray-700">First Name</label>
+                        <input id="id_first_name" name="first_name" type="text" required 
+                               class="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" 
+                               value="{{ form.first_name.value|default:'' }}">
+                        {% if form.first_name.errors %}
+                            <p class="mt-1 text-sm text-red-600">{{ form.first_name.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <label for="id_last_name" class="block text-sm font-medium text-gray-700">Last Name</label>
+                        <input id="id_last_name" name="last_name" type="text" required 
+                               class="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" 
+                               value="{{ form.last_name.value|default:'' }}">
+                        {% if form.last_name.errors %}
+                            <p class="mt-1 text-sm text-red-600">{{ form.last_name.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div>
+                    <label for="id_username" class="block text-sm font-medium text-gray-700">Username</label>
+                    <input id="id_username" name="username" type="text" required 
+                           class="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" 
+                           value="{{ form.username.value|default:'' }}">
+                    {% if form.username.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.username.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <div>
+                    <label for="id_email" class="block text-sm font-medium text-gray-700">Email</label>
+                    <input id="id_email" name="email" type="email" required 
+                           class="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" 
+                           value="{{ form.email.value|default:'' }}">
+                    {% if form.email.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.email.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <div>
+                    <label for="id_role" class="block text-sm font-medium text-gray-700">Role</label>
+                    <select id="id_role" name="role" required 
+                            class="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <option value="">Select a role</option>
+                        {% for choice in form.role.field.choices %}
+                            <option value="{{ choice.0 }}" {% if form.role.value == choice.0 %}selected{% endif %}>{{ choice.1 }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if form.role.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.role.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <div>
+                    <label for="id_phone" class="block text-sm font-medium text-gray-700">Phone (Optional)</label>
+                    <input id="id_phone" name="phone" type="text" 
+                           class="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" 
+                           value="{{ form.phone.value|default:'' }}">
+                    {% if form.phone.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.phone.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <div>
+                    <label for="id_date_of_birth" class="block text-sm font-medium text-gray-700">Date of Birth (Optional)</label>
+                    <input id="id_date_of_birth" name="date_of_birth" type="date" 
+                           class="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" 
+                           value="{{ form.date_of_birth.value|default:'' }}">
+                    {% if form.date_of_birth.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.date_of_birth.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <div>
+                    <label for="id_password1" class="block text-sm font-medium text-gray-700">Password</label>
+                    <input id="id_password1" name="password1" type="password" required 
+                           class="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    {% if form.password1.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.password1.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <div>
+                    <label for="id_password2" class="block text-sm font-medium text-gray-700">Confirm Password</label>
+                    <input id="id_password2" name="password2" type="password" required 
+                           class="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    {% if form.password2.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.password2.errors.0 }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div>
+                <button type="submit" 
+                        class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    Create Account
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

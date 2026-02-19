@@ -1,0 +1,68 @@
+{% extends 'medical/base.html' %}
+
+{% block title %}Doctors - Telemedicine System{% endblock %}
+
+{% block medical_content %}
+<div class="mb-6">
+    <h1 class="text-3xl font-bold text-gray-900">Doctors</h1>
+    <p class="text-gray-600 mt-2">Find and book appointments with our healthcare professionals</p>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    {% for doctor in doctors %}
+        <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow">
+            <div class="p-6">
+                <div class="flex items-center mb-4">
+                    <div class="h-12 w-12 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
+                        {{ doctor.user.first_name.0 }}{{ doctor.user.last_name.0 }}
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-semibold text-gray-900">
+                            Dr. {{ doctor.user.first_name }} {{ doctor.user.last_name }}
+                        </h3>
+                        <p class="text-sm text-gray-600">{{ doctor.specialization }}</p>
+                    </div>
+                </div>
+                
+                <div class="space-y-2 text-sm text-gray-600">
+                    <p><strong>License:</strong> {{ doctor.license_number }}</p>
+                    <p><strong>Experience:</strong> {{ doctor.experience_years }} years</p>
+                    <p><strong>Consultation Fee:</strong> ${{ doctor.consultation_fee }}</p>
+                    <p><strong>Hospital:</strong> {{ doctor.hospital.name }}</p>
+                    {% if doctor.is_available %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            Available
+                        </span>
+                    {% else %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            Not Available
+                        </span>
+                    {% endif %}
+                </div>
+                
+                {% if doctor.bio %}
+                    <p class="mt-3 text-sm text-gray-600 line-clamp-2">{{ doctor.bio }}</p>
+                {% endif %}
+                
+                <div class="mt-4 pt-4 border-t border-gray-200">
+                    <a href="{% url 'medical:doctor_detail' doctor.id %}" 
+                       class="inline-flex items-center text-blue-600 hover:text-blue-800 font-medium text-sm">
+                        View Profile & Book
+                        <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+        </div>
+    {% empty %}
+        <div class="col-span-full text-center py-12">
+            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+            </svg>
+            <h3 class="mt-2 text-sm font-medium text-gray-900">No doctors available</h3>
+            <p class="mt-1 text-sm text-gray-500">Check back later for available doctors.</p>
+        </div>
+    {% endfor %}
+</div>
+{% endblock %}

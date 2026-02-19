@@ -1,0 +1,106 @@
+{% extends 'accounts/dashboard_base.html' %}
+
+{% block title %}Doctor Dashboard - Telemedicine System{% endblock %}
+
+{% block dashboard_content %}
+    {% if pending_appointments_count > 0 %}
+            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+                <h3 class="text-lg font-semibold text-yellow-800 mb-2">
+                    📋 {{ pending_appointments_count }} Pending Appointment Request{{ pending_appointments_count|pluralize }}
+                </h3>
+                <p class="text-sm text-yellow-700">
+                    You have {{ pending_appointments_count }} appointment{{ pending_appointments_count|pluralize }} to review from hospital administrators.
+                </p>
+            </div>
+        {% endif %}
+        
+        <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">Today's Appointments</h1>
+        <p class="text-gray-600 mt-2">Your scheduled appointments for today</p>
+    </div>
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="p-5">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-blue-500 rounded-md flex items-center justify-center">
+                        <span class="text-white text-sm font-medium">A</span>
+                    </div>
+                </div>
+                <div class="ml-5 w-0 flex-1">
+                    <dl>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Today's Appointments</dt>
+                        <dd class="text-lg font-medium text-gray-900">0</dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="p-5">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-green-500 rounded-md flex items-center justify-center">
+                        <span class="text-white text-sm font-medium">P</span>
+                    </div>
+                </div>
+                <div class="ml-5 w-0 flex-1">
+                    <dl>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Total Patients</dt>
+                        <dd class="text-lg font-medium text-gray-900">0</dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="p-5">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-purple-500 rounded-md flex items-center justify-center">
+                        <span class="text-white text-sm font-medium">W</span>
+                    </div>
+                </div>
+                <div class="ml-5 w-0 flex-1">
+                    <dl>
+                        <dt class="text-sm font-medium text-gray-500 truncate">Waiting Room</dt>
+                        <dd class="text-lg font-medium text-gray-900">0</dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="bg-white shadow rounded-lg">
+    <div class="px-4 py-5 sm:p-6">
+        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Today's Schedule</h3>
+        <div class="text-center py-8">
+            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <p class="mt-2 text-sm text-gray-500">No appointments scheduled for today</p>
+        </div>
+    </div>
+</div>
+
+<div class="mt-8 bg-white shadow rounded-lg">
+    <div class="px-4 py-5 sm:p-6">
+        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Quick Actions</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <button class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700">
+                Set Availability
+            </button>
+            <button class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                View Patients
+            </button>
+            <button class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                View History
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}

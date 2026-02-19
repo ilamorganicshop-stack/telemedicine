@@ -1,0 +1,66 @@
+{% extends 'accounts/super_admin_base.html' %}
+
+{% block title %}Manage Hospitals{% endblock %}
+
+{% block super_admin_content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-white">Manage Hospitals</h1>
+        <p class="text-slate-400 mt-2">View and manage all hospitals in the system</p>
+    </div>
+
+    <div class="bg-white/95 text-slate-900 rounded-2xl shadow-xl">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <h2 class="text-xl font-semibold text-gray-800">Hospitals List</h2>
+                <a href="{% url 'accounts:create_hospital' %}" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">
+                    Create New Hospital
+                </a>
+            </div>
+        </div>
+        
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Address</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white text-slate-900 divide-y divide-gray-200">
+                    {% for hospital in hospitals %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-900">
+                            {{ hospital.name }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-gray-600">
+                            {{ hospital.email }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-gray-600">
+                            {{ hospital.phone }}
+                        </td>
+                        <td class="px-6 py-4 text-gray-600 max-w-xs truncate">
+                            {{ hospital.address }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {{ hospital.created_at|date:"M d, Y" }}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="px-6 py-12 text-center text-gray-500">
+                            No hospitals found. <a href="{% url 'accounts:create_hospital' %}" class="text-indigo-600 hover:text-indigo-800">Create the first hospital</a>.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+

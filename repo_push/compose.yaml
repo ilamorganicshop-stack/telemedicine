@@ -1,0 +1,18 @@
+services:
+  telemedicine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - target: 8000
+        published: 8000
+    environment:
+      - DEBUG=False
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-change-me-in-production}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

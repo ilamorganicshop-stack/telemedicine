@@ -1,0 +1,17 @@
+name: django
+services:
+  django:
+    restart: unless-stopped
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    ports:
+      - mode: ingress
+        target: 8000
+    environment:
+      - DEBUG=False
+    deploy:
+      resources:
+        reservations:
+          cpus: "0.5"
+          memory: 512M
