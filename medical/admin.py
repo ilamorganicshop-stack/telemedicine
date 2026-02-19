@@ -27,8 +27,8 @@ class PatientProfileAdmin(admin.ModelAdmin):
 
 @admin.register(Appointment)
 class AppointmentAdmin(admin.ModelAdmin):
-    list_display = ('patient', 'doctor', 'hospital', 'appointment_date', 'status', 'payment_status')
-    list_filter = ('status', 'payment_status', 'appointment_date', 'hospital')
+    list_display = ('patient', 'doctor', 'hospital', 'appointment_date', 'status', 'video_call_status')
+    list_filter = ('status', 'video_call_status', 'appointment_date', 'hospital')
     search_fields = ('patient__first_name', 'patient__last_name', 'doctor__first_name', 'doctor__last_name')
     date_hierarchy = 'appointment_date'
     readonly_fields = ('created_at', 'updated_at')

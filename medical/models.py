@@ -1,3 +1,4 @@
+import uuid
 from django.db import models
 from django.conf import settings
 from django.core.validators import EmailValidator, RegexValidator
@@ -71,14 +72,15 @@ class PatientProfile(models.Model):
         blank=True,
         null=True
     )
-    payment_status = models.BooleanField(default=False, help_text="Whether the patient has paid the registration fee")
-    khalti_transaction_id = models.CharField(max_length=100, blank=True, null=True, help_text="Khalti transaction ID for verification")
+    # Payment fields for Khalti integration
+    payment_status = models.BooleanField(default=False, help_text="Whether patient has paid registration fee")
+    khalti_transaction_id = models.CharField(max_length=100, blank=True, null=True, help_text="Khalti transaction reference")
     registration_fee = models.DecimalField(max_digits=10, decimal_places=2, default=500.00, help_text="Registration fee amount in NPR")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
     def __str__(self):
-        return f"{self.user.first_name} {self.user.last_name} (Patient)"
+        return f"{self.user.first_name} {self.user.last_name} - Patient"
     
     class Meta:
         verbose_name = "Patient Profile"
@@ -87,15 +89,21 @@ class PatientProfile(models.Model):
 
 class Appointment(models.Model):
     STATUS_CHOICES = [
-        ('requested', 'Requested'),          # Admin booked appointment for patient
-        ('pending_approval', 'Pending Approval'), # Waiting for doctor approval
-        ('scheduled', 'Scheduled'),           # Doctor approved and scheduled
-        ('confirmed', 'Confirmed'),           # Patient confirmed the appointment
-        ('in_progress', 'In Progress'),      # Appointment in progress
-        ('completed', 'Completed'),           # Appointment completed
-        ('cancelled', 'Cancelled'),           # Cancelled by patient/admin
-        ('rejected', 'Rejected'),             # Rejected by doctor
-        ('no_show', 'No Show'),            # Patient didn't show up
+        ('requested', 'Requested'),
+        ('pending_approval', 'Pending Approval'),
+        ('scheduled', 'Scheduled'),
+        ('confirmed', 'Confirmed'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+        ('rejected', 'Rejected'),
+    ]
+    
+    VIDEO_CALL_STATUS_CHOICES = [
+        ('not_started', 'Not Started'),
+        ('waiting', 'Waiting for Doctor'),
+        ('in_progress', 'In Progress'),
+        ('ended', 'Ended'),
     ]
     
     patient = models.ForeignKey(
@@ -108,14 +116,76 @@ class Appointment(models.Model):
         on_delete=models.CASCADE, 
         related_name='doctor_appointments'
     )
-    hospital = models.ForeignKey(Hospital, on_delete=models.CASCADE, related_name='appointments')
+    hospital = models.ForeignKey(
+        Hospital, 
+        on_delete=models.CASCADE, 
+        related_name='appointments'
+    )
     appointment_date = models.DateTimeField()
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='scheduled')
     symptoms = models.TextField(blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
-    consultation_fee = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
-    payment_status = models.BooleanField(default=False)
-    requested_by_admin = models.ForeignKey(
+    status = models.CharField(
+        max_length=20, 
+        choices=STATUS_CHOICES, 
+        default='requested'
+    )
+    
+    # Video call fields
+    video_call_room_id = models.CharField(
+        max_length=100, 
+        blank=True, 
+        null=True,
+        help_text="Unique room ID for video call",
+        unique=True
+    )
+    video_call_status = models.CharField(
+        max_length=20,
+        choices=VIDEO_CALL_STATUS_CHOICES,
+        default='not_started',
+        help_text="Current status of the video call"
+    )
+    video_call_started_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="When the video call started"
+    )
+    video_call_ended_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="When the video call ended"
+    )
+    doctor_token = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Secure token for doctor to join video call"
+    )
+    patient_token = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Secure token for patient to join video call"
+    )
+    token_created_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="When the tokens were generated"
+    )
+    recording_enabled = models.BooleanField(
+        default=False,
+        help_text="Whether call recording is enabled (requires patient consent)"
+    )
+    screen_sharing_active = models.BooleanField(
+        default=False,
+        help_text="Whether screen sharing is currently active"
+    )
+    call_duration = models.PositiveIntegerField(
+        default=0,
+        help_text="Call duration in seconds"
+    )
+    
+    # Existing fields
+    requested_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
@@ -133,6 +203,48 @@ class Appointment(models.Model):
     
     def __str__(self):
         return f"Appointment: {self.patient.first_name} {self.patient.last_name} with Dr. {self.doctor.first_name} {self.doctor.last_name} on {self.appointment_date.strftime('%Y-%m-%d %H:%M')}"
+    
+    def generate_room_id(self):
+        """Generate a unique room ID for video call"""
+        self.video_call_room_id = str(uuid.uuid4())
+        return self.video_call_room_id
+    
+    def generate_tokens(self):
+        """Generate secure tokens for doctor and patient"""
+        self.doctor_token = str(uuid.uuid4())
+        self.patient_token = str(uuid.uuid4())
+        self.token_created_at = timezone.now()
+        return self.doctor_token, self.patient_token
+    
+    def start_video_call(self):
+        """Mark video call as started"""
+        from django.utils import timezone
+        self.video_call_status = 'in_progress'
+        self.video_call_started_at = timezone.now()
+        self.save()
+    
+    def end_video_call(self):
+        """Mark video call as ended and calculate duration"""
+        from django.utils import timezone
+        self.video_call_status = 'ended'
+        self.video_call_ended_at = timezone.now()
+        if self.video_call_started_at:
+            duration = (self.video_call_ended_at - self.video_call_started_at).total_seconds()
+            self.call_duration = int(duration)
+        self.save()
+    
+    def is_token_valid(self, token_type='patient'):
+        """Check if token is still valid (not expired)"""
+        from django.utils import timezone
+        from django.conf import settings
+        
+        if not self.token_created_at:
+            return False
+        
+        expiry_hours = getattr(settings, 'VIDEO_CALL_TOKEN_EXPIRY', 24)
+        expiry_time = self.token_created_at + timezone.timedelta(hours=expiry_hours)
+        
+        return timezone.now() <= expiry_time
     
     class Meta:
         verbose_name = "Appointment"

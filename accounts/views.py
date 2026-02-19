@@ -60,10 +60,9 @@ def login_view(request):
             print(f"DEBUG: Authentication result: {authenticated_user}")
             if authenticated_user is not None:
                 login(request, authenticated_user)
-                messages.success(request, f'Welcome back, {authenticated_user.username}!')
                 
                 # Check if user is a patient and payment status
-                if authenticated_user.is_patient:
+                if authenticated_user.role == 'patient':
                     try:
                         patient_profile = authenticated_user.patient_profile
                         if not patient_profile.payment_status:
@@ -75,6 +74,7 @@ def login_view(request):
                         messages.info(request, 'Please complete your registration payment to access the dashboard.')
                         return redirect('accounts:khalti_payment')
                 
+                messages.success(request, f'Welcome back, {authenticated_user.username}!')
                 return redirect('accounts:dashboard')
             messages.error(request, 'Invalid username or password. Please try again.')
     
@@ -102,6 +102,18 @@ class SignUpView(CreateView):
 @login_required
 def dashboard_view(request):
     user = request.user
+    
+    # Check if patient needs to pay
+    if user.role == 'patient':
+        try:
+            patient_profile = user.patient_profile
+            if not patient_profile.payment_status:
+                messages.info(request, 'Please complete your registration payment to access the dashboard.')
+                return redirect('accounts:khalti_payment')
+        except PatientProfile.DoesNotExist:
+            messages.info(request, 'Please complete your registration payment to access the dashboard.')
+            return redirect('accounts:khalti_payment')
+    
     context = {'user': user}
     
     if user.is_super_admin:

@@ -1,0 +1,419 @@
+{% extends 'medical/base.html' %}
+
+{% block title %}Test Camera & Microphone{% endblock %}
+
+{% block extra_css %}
+<style>
+    .test-container {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+    
+    .video-preview {
+        width: 100%;
+        max-width: 640px;
+        height: 480px;
+        background: #1a1a1a;
+        border-radius: 12px;
+        margin: 20px auto;
+        display: block;
+    }
+    
+    .audio-meter {
+        width: 100%;
+        height: 30px;
+        background: #2d3748;
+        border-radius: 15px;
+        overflow: hidden;
+        margin: 20px 0;
+    }
+    
+    .audio-level {
+        height: 100%;
+        background: linear-gradient(90deg, #48bb78 0%, #ecc94b 50%, #e53e3e 100%);
+        width: 0%;
+        transition: width 0.1s ease;
+    }
+    
+    .device-select {
+        width: 100%;
+        padding: 12px;
+        border-radius: 8px;
+        border: 1px solid #e2e8f0;
+        background: white;
+        margin-bottom: 15px;
+    }
+    
+    .test-status {
+        padding: 15px;
+        border-radius: 8px;
+        margin: 15px 0;
+    }
+    
+    .test-status.success {
+        background: #c6f6d5;
+        color: #22543d;
+    }
+    
+    .test-status.error {
+        background: #fed7d7;
+        color: #742a2a;
+    }
+    
+    .test-status.info {
+        background: #bee3f8;
+        color: #2a4365;
+    }
+</style>
+{% endblock %}
+
+{% block medical_content %}
+<div class="test-container">
+    <div class="mb-6">
+        <a href="{% url 'accounts:dashboard' %}" class="text-blue-600 hover:text-blue-800">
+            ← Back to Dashboard
+        </a>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-lg p-8">
+        <h1 class="text-3xl font-bold text-gray-900 mb-4 text-center">Test Your Camera & Microphone</h1>
+        <p class="text-gray-600 text-center mb-8">
+            Before joining a video consultation, please test your camera and microphone to ensure everything is working properly.
+        </p>
+
+        <!-- Device Selection -->
+        <div class="grid md:grid-cols-2 gap-6 mb-6">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Camera</label>
+                <select id="videoSelect" class="device-select">
+                    <option value="">Loading cameras...</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Microphone</label>
+                <select id="audioSelect" class="device-select">
+                    <option value="">Loading microphones...</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Video Preview -->
+        <div class="text-center">
+            <video id="previewVideo" class="video-preview" autoplay playsinline muted></video>
+        </div>
+
+        <!-- Audio Level Meter -->
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Microphone Level</label>
+            <div class="audio-meter">
+                <div id="audioLevel" class="audio-level"></div>
+            </div>
+            <p class="text-sm text-gray-500 mt-1">Speak to see the audio level indicator</p>
+        </div>
+
+        <!-- Test Status -->
+        <div id="testStatus" class="test-status info" style="display: none;">
+            <p id="statusText">Click "Start Test" to begin testing your devices</p>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex justify-center gap-4 mt-8">
+            <button id="startBtn" onclick="startTest()" class="bg-blue-500 text-white px-8 py-3 rounded-lg hover:bg-blue-600 font-medium">
+                Start Test
+            </button>
+            <button id="stopBtn" onclick="stopTest()" class="bg-red-500 text-white px-8 py-3 rounded-lg hover:bg-red-600 font-medium" style="display: none;">
+                Stop Test
+            </button>
+        </div>
+
+        <!-- Test Results -->
+        <div id="testResults" class="mt-8 p-6 bg-gray-50 rounded-lg" style="display: none;">
+            <h3 class="font-semibold text-lg mb-4">Test Results</h3>
+            <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                    <span>Camera</span>
+                    <span id="cameraResult" class="font-medium">Not tested</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span>Microphone</span>
+                    <span id="microphoneResult" class="font-medium">Not tested</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span>Connection</span>
+                    <span id="connectionResult" class="font-medium">Not tested</span>
+                </div>
+            </div>
+            <div class="mt-6 text-center">
+                <p class="text-gray-600 mb-4">All tests passed? You're ready for your video consultation!</p>
+                <a href="{% url 'medical:appointment_list' %}" class="bg-green-500 text-white px-8 py-3 rounded-lg hover:bg-green-600 font-medium inline-block">
+                    Go to Appointments
+                </a>
+            </div>
+        </div>
+
+        <!-- Troubleshooting -->
+        <div class="mt-8 p-6 bg-yellow-50 rounded-lg border border-yellow-200">
+            <h3 class="font-semibold text-lg mb-3 text-yellow-800">Troubleshooting Tips</h3>
+            <ul class="list-disc list-inside space-y-2 text-yellow-700">
+                <li>Make sure you've allowed camera and microphone access in your browser</li>
+                <li>Close other applications that might be using your camera (Zoom, Teams, etc.)</li>
+                <li>Try refreshing the page if devices don't appear</li>
+                <li>Use a modern browser like Chrome, Firefox, or Edge for best results</li>
+                <li>Ensure you're in a well-lit area for the camera test</li>
+                <li>Speak clearly and at normal volume for the microphone test</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let stream = null;
+    let audioContext = null;
+    let analyser = null;
+    let dataArray = null;
+    let animationId = null;
+    
+    const videoSelect = document.getElementById('videoSelect');
+    const audioSelect = document.getElementById('audioSelect');
+    const previewVideo = document.getElementById('previewVideo');
+    const audioLevel = document.getElementById('audioLevel');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const testStatus = document.getElementById('testStatus');
+    const statusText = document.getElementById('statusText');
+    const testResults = document.getElementById('testResults');
+    
+    // Load available devices
+    async function loadDevices() {
+        try {
+            // Request permission first to get device labels
+            await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            
+            // Clear and populate video devices
+            videoSelect.innerHTML = '<option value="">Select Camera</option>';
+            const videoDevices = devices.filter(d => d.kind === 'videoinput');
+            videoDevices.forEach((device, index) => {
+                const option = document.createElement('option');
+                option.value = device.deviceId;
+                option.text = device.label || `Camera ${index + 1}`;
+                videoSelect.appendChild(option);
+            });
+            
+            // Clear and populate audio devices
+            audioSelect.innerHTML = '<option value="">Select Microphone</option>';
+            const audioDevices = devices.filter(d => d.kind === 'audioinput');
+            audioDevices.forEach((device, index) => {
+                const option = document.createElement('option');
+                option.value = device.deviceId;
+                option.text = device.label || `Microphone ${index + 1}`;
+                audioSelect.appendChild(option);
+            });
+            
+        } catch (error) {
+            console.error('Error loading devices:', error);
+            showStatus('Could not access devices. Please check permissions.', 'error');
+        }
+    }
+    
+    // Start test
+    async function startTest() {
+        const videoDeviceId = videoSelect.value;
+        const audioDeviceId = audioSelect.value;
+        
+        if (!videoDeviceId || !audioDeviceId) {
+            showStatus('Please select both camera and microphone', 'error');
+            return;
+        }
+        
+        try {
+            showStatus('Starting device test...', 'info');
+            
+            // Get stream with selected devices
+            const constraints = {
+                video: {
+                    deviceId: { exact: videoDeviceId },
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                },
+                audio: {
+                    deviceId: { exact: audioDeviceId },
+                    echoCancellation: true,
+                    noiseSuppression: true
+                }
+            };
+            
+            stream = await navigator.mediaDevices.getUserMedia(constraints);
+            
+            // Display video
+            previewVideo.srcObject = stream;
+            
+            // Setup audio analysis
+            setupAudioAnalysis(stream);
+            
+            // Update UI
+            startBtn.style.display = 'none';
+            stopBtn.style.display = 'inline-block';
+            
+            showStatus('Test in progress... Speak to test microphone', 'success');
+            
+            // Run tests
+            runTests();
+            
+        } catch (error) {
+            console.error('Error starting test:', error);
+            showStatus('Error accessing devices: ' + error.message, 'error');
+        }
+    }
+    
+    // Setup audio level analysis
+    function setupAudioAnalysis(stream) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        
+        const source = audioContext.createMediaStreamSource(stream);
+        source.connect(analyser);
+        
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
+        
+        updateAudioLevel();
+    }
+    
+    // Update audio level meter
+    function updateAudioLevel() {
+        if (!analyser) return;
+        
+        animationId = requestAnimationFrame(updateAudioLevel);
+        
+        analyser.getByteFrequencyData(dataArray);
+        
+        // Calculate average level
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+            sum += dataArray[i];
+        }
+        const average = sum / dataArray.length;
+        
+        // Update meter (scale to percentage)
+        const percentage = Math.min((average / 128) * 100, 100);
+        audioLevel.style.width = percentage + '%';
+    }
+    
+    // Run device tests
+    function runTests() {
+        let cameraWorking = false;
+        let microphoneWorking = false;
+        
+        // Check camera
+        const videoTrack = stream.getVideoTracks()[0];
+        if (videoTrack && videoTrack.readyState === 'live') {
+            cameraWorking = true;
+        }
+        
+        // Check microphone (after 3 seconds of audio analysis)
+        setTimeout(() => {
+            const audioTrack = stream.getAudioTracks()[0];
+            if (audioTrack && audioTrack.readyState === 'live') {
+                // Check if we've detected any audio levels
+                const currentWidth = parseFloat(audioLevel.style.width) || 0;
+                microphoneWorking = currentWidth > 5; // At least some audio detected
+            }
+            
+            // Show results
+            showResults(cameraWorking, microphoneWorking);
+            
+        }, 3000);
+    }
+    
+    // Show test results
+    function showResults(cameraWorking, microphoneWorking) {
+        testResults.style.display = 'block';
+        
+        // Camera result
+        const cameraResult = document.getElementById('cameraResult');
+        if (cameraWorking) {
+            cameraResult.textContent = '✓ Working';
+            cameraResult.className = 'font-medium text-green-600';
+        } else {
+            cameraResult.textContent = '✗ Not working';
+            cameraResult.className = 'font-medium text-red-600';
+        }
+        
+        // Microphone result
+        const microphoneResult = document.getElementById('microphoneResult');
+        if (microphoneWorking) {
+            microphoneResult.textContent = '✓ Working';
+            microphoneResult.className = 'font-medium text-green-600';
+        } else {
+            microphoneResult.textContent = '✗ Not working';
+            microphoneResult.className = 'font-medium text-red-600';
+        }
+        
+        // Connection result (always pass if we got this far)
+        const connectionResult = document.getElementById('connectionResult');
+        connectionResult.textContent = '✓ Good';
+        connectionResult.className = 'font-medium text-green-600';
+        
+        // Update status
+        if (cameraWorking && microphoneWorking) {
+            showStatus('All tests passed! You are ready for video consultation.', 'success');
+        } else {
+            showStatus('Some tests failed. Please check the troubleshooting tips below.', 'error');
+        }
+    }
+    
+    // Stop test
+    function stopTest() {
+        // Stop all tracks
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+        }
+        
+        // Stop audio analysis
+        if (animationId) {
+            cancelAnimationFrame(animationId);
+        }
+        
+        if (audioContext) {
+            audioContext.close();
+        }
+        
+        // Clear video
+        previewVideo.srcObject = null;
+        
+        // Reset UI
+        startBtn.style.display = 'inline-block';
+        stopBtn.style.display = 'none';
+        audioLevel.style.width = '0%';
+        
+        showStatus('Test stopped', 'info');
+    }
+    
+    // Show status message
+    function showStatus(message, type) {
+        testStatus.style.display = 'block';
+        testStatus.className = 'test-status ' + type;
+        statusText.textContent = message;
+    }
+    
+    // Load devices on page load
+    document.addEventListener('DOMContentLoaded', loadDevices);
+    
+    // Handle device selection change
+    videoSelect.addEventListener('change', () => {
+        if (stream) {
+            stopTest();
+        }
+    });
+    
+    audioSelect.addEventListener('change', () => {
+        if (stream) {
+            stopTest();
+        }
+    });
+</script>
+{% endblock %}

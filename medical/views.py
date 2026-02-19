@@ -1,3 +1,5 @@
+import json
+import uuid
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -5,6 +7,8 @@ from django.utils import timezone
 from django.db.models import Q
 from django.contrib.auth import get_user_model
 from django.http import JsonResponse
+from django.conf import settings
+from django.views.decorators.csrf import csrf_exempt
 from .models import Hospital, DoctorProfile, PatientProfile, Appointment, Availability, ChatMessage
 
 User = get_user_model()
@@ -155,11 +159,10 @@ def create_appointment(request):
                     doctor=doctor,
                     hospital=hospital,
                     appointment_date=appointment_datetime,
-                    symptoms=symptoms,
-                    consultation_fee=doctor.doctor_profile.consultation_fee
+                    symptoms=symptoms
                 )
                 messages.success(request, f"Appointment scheduled with Dr. {doctor.first_name} {doctor.last_name}!")
-                return redirect('appointment_detail', appointment_id=appointment.id)
+                return redirect('medical:appointment_detail', appointment_id=appointment.id)
                 
         except (User.DoesNotExist, Hospital.DoesNotExist, ValueError) as e:
             messages.error(request, "Invalid selection. Please try again.")
@@ -194,7 +197,7 @@ def update_appointment_status(request, appointment_id):
         else:
             messages.error(request, "Invalid status.")
     
-    return redirect('appointment_detail', appointment_id=appointment.id)
+    return redirect('medical:appointment_detail', appointment_id=appointment.id)
 
 
 @login_required
@@ -210,7 +213,7 @@ def cancel_appointment(request, appointment_id):
     # Only allow cancellation if appointment is not completed
     if appointment.status == 'completed':
         messages.error(request, "Cannot cancel completed appointments.")
-        return redirect('appointment_detail', appointment_id=appointment.id)
+        return redirect('medical:appointment_detail', appointment_id=appointment.id)
     
     if request.method == 'POST':
         appointment.status = 'cancelled'
@@ -218,7 +221,7 @@ def cancel_appointment(request, appointment_id):
         appointment.save()
         messages.success(request, "Appointment cancelled successfully.")
     
-    return redirect('appointment_detail', appointment_id=appointment.id)
+    return redirect('medical:appointment_detail', appointment_id=appointment.id)
 
 
 @login_required
@@ -235,7 +238,7 @@ def chat_view(request, appointment_id):
         return redirect('dashboard')
     
     # Get chat messages
-    messages = ChatMessage.objects.filter(
+    chat_messages = ChatMessage.objects.filter(
         appointment=appointment
     ).select_related('sender').order_by('created_at')
     
@@ -255,7 +258,7 @@ def chat_view(request, appointment_id):
     
     return render(request, 'medical/chat.html', {
         'appointment': appointment,
-        'messages': messages
+        'messages': chat_messages
     })
 
 
@@ -289,4 +292,172 @@ def send_message(request, appointment_id):
         'sender': f"{message.sender.first_name} {message.sender.last_name}",
         'created_at': message.created_at.strftime('%Y-%m-%d %H:%M:%S'),
         'is_self': message.sender == user
+    })
+
+
+# ==================== VIDEO CALL VIEWS ====================
+
+@login_required
+def video_call_view(request, appointment_id):
+    """Main video call page for doctor or patient"""
+    appointment = get_object_or_404(
+        Appointment.objects.select_related('patient', 'doctor', 'hospital'),
+        id=appointment_id
+    )
+    
+    user = request.user
+    
+    # Check permissions
+    if not (user == appointment.patient or user == appointment.doctor):
+        messages.error(request, "You don't have permission to join this video call.")
+        return redirect('dashboard')
+    
+    # Determine user type
+    user_type = 'doctor' if user == appointment.doctor else 'patient'
+    
+    # Validate token
+    token = request.GET.get('token')
+    valid_token = False
+    
+    if user_type == 'doctor' and token == appointment.doctor_token:
+        valid_token = appointment.is_token_valid('doctor')
+    elif user_type == 'patient' and token == appointment.patient_token:
+        valid_token = appointment.is_token_valid('patient')
+    
+    if not valid_token:
+        messages.error(request, "Invalid or expired access token.")
+        return redirect('medical:chat', appointment_id=appointment.id)
+    
+    # If doctor is joining, mark call as in progress
+    if user_type == 'doctor' and appointment.video_call_status == 'waiting':
+        appointment.start_video_call()
+    
+    # Get WebRTC configuration
+    webrtc_config = {
+        'stun_servers': settings.WEBRTC_STUN_SERVERS,
+        'turn_servers': settings.WEBRTC_TURN_SERVERS,
+    }
+    
+    return render(request, 'medical/video_call.html', {
+        'appointment': appointment,
+        'user_type': user_type,
+        'room_id': appointment.video_call_room_id,
+        'webrtc_config': json.dumps(webrtc_config),
+    })
+
+
+@login_required
+def start_video_call(request, appointment_id):
+    """Doctor initiates video call"""
+    appointment = get_object_or_404(Appointment, id=appointment_id)
+    user = request.user
+    
+    # Only doctor can start the call
+    if user != appointment.doctor:
+        messages.error(request, "Only the doctor can start the video call.")
+        return redirect('medical:chat', appointment_id=appointment.id)
+    
+    # Generate room ID and tokens if not already created
+    if not appointment.video_call_room_id:
+        appointment.generate_room_id()
+    
+    if not appointment.doctor_token or not appointment.patient_token:
+        appointment.generate_tokens()
+        appointment.save()
+    
+    # Set status to waiting (patient needs to join)
+    appointment.video_call_status = 'waiting'
+    appointment.save()
+    
+    # Redirect doctor to video call room
+    return redirect(f'/medical/appointments/{appointment.id}/video-call/?token={appointment.doctor_token}')
+
+
+@login_required
+def join_video_call(request, appointment_id):
+    """Patient joins video call with token"""
+    appointment = get_object_or_404(Appointment, id=appointment_id)
+    user = request.user
+    
+    # Only patient can join with this endpoint
+    if user != appointment.patient:
+        messages.error(request, "Invalid access.")
+        return redirect('dashboard')
+    
+    # Check if call has been started by doctor
+    if appointment.video_call_status == 'not_started':
+        messages.info(request, "The doctor has not started the video call yet. Please wait.")
+        return redirect('medical:chat', appointment_id=appointment.id)
+    
+    # Redirect patient to video call room with their token
+    return redirect(f'/medical/appointments/{appointment.id}/video-call/?token={appointment.patient_token}')
+
+
+@login_required
+def end_video_call(request, appointment_id):
+    """End video call - can be called by either doctor or patient"""
+    appointment = get_object_or_404(Appointment, id=appointment_id)
+    user = request.user
+    
+    # Check permissions
+    if not (user == appointment.patient or user == appointment.doctor):
+        messages.error(request, "Permission denied.")
+        return redirect('dashboard')
+    
+    # End the call
+    if appointment.video_call_status == 'in_progress':
+        appointment.end_video_call()
+        messages.success(request, "Video call ended.")
+    else:
+        messages.info(request, "Video call was already ended.")
+    
+    return redirect('medical:chat', appointment_id=appointment.id)
+
+
+@login_required
+def test_devices(request):
+    """Pre-call camera and microphone test page"""
+    return render(request, 'medical/video_call_test.html')
+
+
+@csrf_exempt
+def video_call_signal(request, appointment_id):
+    """WebRTC signaling endpoint for AJAX-based signaling (fallback)"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST allowed'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        signal_type = data.get('type')
+        
+        # In a production environment, you would broadcast this signal
+        # to the other peer via WebSocket or another real-time mechanism
+        # For now, we return success and let the WebSocket handle real-time signaling
+        
+        return JsonResponse({
+            'success': True,
+            'type': signal_type,
+            'message': 'Signal received'
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+def get_video_call_status(request, appointment_id):
+    """AJAX endpoint to get current video call status"""
+    appointment = get_object_or_404(Appointment, id=appointment_id)
+    user = request.user
+    
+    if not (user == appointment.patient or user == appointment.doctor):
+        return JsonResponse({'error': 'Permission denied'}, status=403)
+    
+    return JsonResponse({
+        'status': appointment.video_call_status,
+        'room_id': appointment.video_call_room_id,
+        'started_at': appointment.video_call_started_at.isoformat() if appointment.video_call_started_at else None,
+        'duration': appointment.call_duration,
     })

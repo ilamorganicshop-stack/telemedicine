@@ -40,6 +40,8 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "channels",  # Django Channels for WebSocket support
+    "corsheaders",  # CORS headers for WebRTC
     "accounts",
     "medical",
 ]
@@ -47,6 +49,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    "corsheaders.middleware.CorsMiddleware",  # CORS middleware
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -74,7 +77,9 @@ TEMPLATES = [
     },
 ]
 
+# WSGI and ASGI applications
 WSGI_APPLICATION = "telemedicine.wsgi.application"
+ASGI_APPLICATION = "telemedicine.asgi.application"  # Django Channels ASGI
 
 
 # Database
@@ -152,6 +157,45 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "accounts.User"
 
 # Khalti Payment Gateway Configuration
-KHALTI_PUBLIC_KEY = os.environ.get("KHALTI_PUBLIC_KEY", "test_public_key_dc74e0fd57cb46cd93832aee0a390234")
-KHALTI_SECRET_KEY = os.environ.get("KHALTI_SECRET_KEY", "test_secret_key_f59e8b7d18b4499ca40f68195a846e9b")
+KHALTI_PUBLIC_KEY = os.environ.get("KHALTI_PUBLIC_KEY", "3c3f309c5bd6492d9f8cb6fcdc0006ea")
+KHALTI_SECRET_KEY = os.environ.get("KHALTI_SECRET_KEY", "d60ad3d2797a424888063495b67ab7d3")
 KHALTI_VERIFY_URL = "https://khalti.com/api/v2/payment/verify/"
+
+# Django Channels Configuration
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [os.environ.get("REDIS_URL", "redis://localhost:6379")],
+        },
+    },
+}
+
+# CORS Configuration for WebRTC
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "https://*.defang.dev",
+]
+
+CORS_ALLOW_CREDENTIALS = True
+
+# WebRTC Configuration
+WEBRTC_STUN_SERVERS = [
+    "stun:stun.l.google.com:19302",
+    "stun:stun1.l.google.com:19302",
+]
+
+# TURN server configuration (for production, use your own TURN server)
+WEBRTC_TURN_SERVERS = [
+    {
+        "urls": os.environ.get("TURN_SERVER_URL", "turn:turn.example.com:3478"),
+        "username": os.environ.get("TURN_USERNAME", "user"),
+        "credential": os.environ.get("TURN_CREDENTIAL", "pass"),
+    }
+]
+
+# Video Call Settings
+VIDEO_CALL_MAX_DURATION = 60  # minutes
+VIDEO_CALL_DEFAULT_FEE = 500.00  # NPR
+VIDEO_CALL_TOKEN_EXPIRY = 24  # hours

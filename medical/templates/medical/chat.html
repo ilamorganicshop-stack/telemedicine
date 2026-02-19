@@ -18,6 +18,98 @@
         </p>
     </div>
 
+    <!-- Video Call Section -->
+    <div class="bg-white shadow-md rounded-lg p-6 mb-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <h2 class="text-lg font-semibold text-gray-900">Video Consultation</h2>
+                <p class="text-sm text-gray-600">
+                    {% if appointment.video_call_status == 'not_started' %}
+                        Start a video call for face-to-face consultation
+                    {% elif appointment.video_call_status == 'waiting' %}
+                        Video call is waiting for participants
+                    {% elif appointment.video_call_status == 'in_progress' %}
+                        Video call is currently in progress
+                    {% elif appointment.video_call_status == 'ended' %}
+                        Video call has ended
+                    {% endif %}
+                </p>
+            </div>
+            <div class="flex gap-3">
+                {% if user == appointment.doctor %}
+                    {% if appointment.video_call_status == 'not_started' or appointment.video_call_status == 'ended' %}
+                        <a href="{% url 'medical:start_video_call' appointment.id %}" class="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 flex items-center gap-2">
+                            <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+                            </svg>
+                            Start Video Call
+                        </a>
+                    {% elif appointment.video_call_status == 'waiting' or appointment.video_call_status == 'in_progress' %}
+                        <a href="/medical/appointments/{{ appointment.id }}/video-call/?token={{ appointment.doctor_token }}" class="bg-green-500 text-white px-6 py-3 rounded-lg hover:bg-green-600 flex items-center gap-2">
+                            <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+                            </svg>
+                            Join Video Call
+                        </a>
+                    {% endif %}
+                {% else %}
+                    <!-- Patient view -->
+                    {% if appointment.video_call_status == 'waiting' or appointment.video_call_status == 'in_progress' %}
+                        <a href="{% url 'medical:join_video_call' appointment.id %}" class="bg-green-500 text-white px-6 py-3 rounded-lg hover:bg-green-600 flex items-center gap-2">
+                            <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+                            </svg>
+                            Join Video Call
+                        </a>
+                    {% elif appointment.video_call_status == 'not_started' %}
+                        <div class="bg-gray-100 px-6 py-3 rounded-lg text-gray-600 flex items-center gap-2">
+                            <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                            </svg>
+                            Waiting for doctor to start...
+                        </div>
+                    {% endif %}
+                {% endif %}
+                
+                <!-- Test Devices Button -->
+                <a href="{% url 'medical:test_devices' %}" target="_blank" class="bg-gray-100 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-200 flex items-center gap-2">
+                    <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                    </svg>
+                    Test Camera & Mic
+                </a>
+            </div>
+        </div>
+        
+        <!-- Video Call Status Badge -->
+        <div class="mt-4 flex items-center gap-4">
+            <span class="text-sm text-gray-600">Status:</span>
+            {% if appointment.video_call_status == 'not_started' %}
+                <span class="px-3 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
+                    Not Started
+                </span>
+            {% elif appointment.video_call_status == 'waiting' %}
+                <span class="px-3 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800">
+                    Waiting for Doctor
+                </span>
+            {% elif appointment.video_call_status == 'in_progress' %}
+                <span class="px-3 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                    In Progress
+                </span>
+            {% elif appointment.video_call_status == 'ended' %}
+                <span class="px-3 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
+                    Ended
+                </span>
+            {% endif %}
+            
+            {% if appointment.call_duration > 0 %}
+                <span class="text-sm text-gray-600">
+                    Last call duration: {{ appointment.call_duration|divisibleby:60 }}:{{ appointment.call_duration|divisibleby:60 }}
+                </span>
+            {% endif %}
+        </div>
+    </div>
+
     <div class="bg-white shadow-md rounded-lg overflow-hidden">
         <!-- Chat Header -->
         <div class="bg-gray-50 px-6 py-4 border-b border-gray-200">
@@ -180,12 +272,10 @@ document.addEventListener('DOMContentLoaded', function() {
         chatMessages.appendChild(messageDiv);
     }
     
-    // Auto-refresh messages every 5 seconds
+    // Auto-refresh messages every 30 seconds
     setInterval(function() {
-        // This is a simple polling approach
-        // In a real application, you'd use WebSockets
         location.reload();
-    }, 30000); // Refresh every 30 seconds
+    }, 30000);
 });
 </script>
 {% endblock %}

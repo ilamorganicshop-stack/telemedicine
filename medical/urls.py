@@ -26,4 +26,13 @@ urlpatterns = [
     # Chat
     path('appointments/<int:appointment_id>/chat/', views.chat_view, name='chat'),
     path('appointments/<int:appointment_id>/send-message/', views.send_message, name='send_message'),
+    
+    # Video Call
+    path('appointments/<int:appointment_id>/video-call/', views.video_call_view, name='video_call'),
+    path('appointments/<int:appointment_id>/video-call/start/', views.start_video_call, name='start_video_call'),
+    path('appointments/<int:appointment_id>/video-call/join/', views.join_video_call, name='join_video_call'),
+    path('appointments/<int:appointment_id>/video-call/end/', views.end_video_call, name='end_video_call'),
+    path('appointments/<int:appointment_id>/video-call/status/', views.get_video_call_status, name='video_call_status'),
+    path('appointments/<int:appointment_id>/video-call/signal/', views.video_call_signal, name='video_call_signal'),
+    path('video-call/test-devices/', views.test_devices, name='test_devices'),
 ]
