@@ -7,12 +7,12 @@ from medical.models import Hospital, PatientProfile, DoctorProfile, Appointment
 class HospitalForm(forms.ModelForm):
     class Meta:
         model = Hospital
-        fields = ['name', 'address', 'phone', 'email', 'website']
+        fields = ['name', 'address', 'phone', 'email', 'appointment_fee']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}),
             'email': forms.EmailInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}),
             'phone': forms.TextInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}),
-            'website': forms.URLInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}),
+            'appointment_fee': forms.NumberInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500', 'step': '0.01'}),
             'address': forms.Textarea(attrs={'rows': 3, 'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}),
         }
 
@@ -24,9 +24,8 @@ class HospitalAdminCreationForm(forms.ModelForm):
     
     class Meta:
         model = User
-        fields = ['username', 'email', 'first_name', 'last_name', 'phone', 'hospital']
+        fields = ['email', 'first_name', 'last_name', 'phone', 'hospital']
         widgets = {
-            'username': forms.TextInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}),
             'email': forms.EmailInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}),
             'first_name': forms.TextInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}),
             'last_name': forms.TextInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}),
@@ -56,13 +55,11 @@ class DoctorCreationForm(forms.ModelForm):
     license_number = forms.CharField(max_length=50, required=True, widget=forms.TextInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}))
     specialization = forms.CharField(max_length=200, required=True, widget=forms.TextInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}))
     experience_years = forms.IntegerField(required=True, widget=forms.NumberInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}))
-    consultation_fee = forms.DecimalField(max_digits=10, decimal_places=2, required=True, widget=forms.NumberInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}))
     
     class Meta:
         model = User
-        fields = ['username', 'email', 'first_name', 'last_name', 'phone', 'date_of_birth', 'hospital']
+        fields = ['email', 'first_name', 'last_name', 'phone', 'date_of_birth', 'hospital']
         widgets = {
-            'username': forms.TextInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}),
             'email': forms.EmailInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}),
             'first_name': forms.TextInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}),
             'last_name': forms.TextInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}),
@@ -90,8 +87,7 @@ class DoctorCreationForm(forms.ModelForm):
                 hospital=self.cleaned_data['hospital'],
                 license_number=self.cleaned_data['license_number'],
                 specialization=self.cleaned_data['specialization'],
-                experience_years=self.cleaned_data['experience_years'],
-                consultation_fee=self.cleaned_data['consultation_fee']
+                experience_years=self.cleaned_data['experience_years']
             )
         return user
 
@@ -101,14 +97,12 @@ class PatientCreationForm(forms.ModelForm):
     password2 = forms.CharField(label='Confirm Password', widget=forms.PasswordInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}))
     hospital = forms.ModelChoiceField(queryset=Hospital.objects.all(), required=True, widget=forms.Select(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}))
     blood_type = forms.ChoiceField(choices=PatientProfile._meta.get_field('blood_type').choices, required=False, widget=forms.Select(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}))
-    payment_status = forms.BooleanField(required=False, initial=False, label='Mark as Paid (Registration Fee)', help_text='Check this if patient has already paid. Once marked paid, cannot be changed back to unpaid.', widget=forms.CheckboxInput(attrs={'class': 'h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded'}))
-    registration_fee = forms.DecimalField(max_digits=10, decimal_places=2, initial=500.00, required=True, label='Registration Fee (NPR)', widget=forms.NumberInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}))
+    payment_status = forms.BooleanField(required=False, initial=False, label='Mark as Paid', help_text='Check this if patient has already paid. Once marked paid, cannot be changed back to unpaid.', widget=forms.CheckboxInput(attrs={'class': 'h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded'}))
     
     class Meta:
         model = User
-        fields = ['username', 'email', 'first_name', 'last_name', 'phone', 'date_of_birth', 'hospital']
+        fields = ['email', 'first_name', 'last_name', 'phone', 'date_of_birth', 'hospital']
         widgets = {
-            'username': forms.TextInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}),
             'email': forms.EmailInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}),
             'first_name': forms.TextInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}),
             'last_name': forms.TextInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}),
@@ -163,7 +157,6 @@ class PatientCreationForm(forms.ModelForm):
                 # Update existing profile
                 profile.hospital = self.cleaned_data['hospital']
                 profile.blood_type = self.cleaned_data.get('blood_type')
-                profile.registration_fee = self.cleaned_data.get('registration_fee', 500.00)
                 # Only update payment_status if it's being set to True (paid)
                 if self.cleaned_data.get('payment_status'):
                     profile.payment_status = True
@@ -174,8 +167,7 @@ class PatientCreationForm(forms.ModelForm):
                     user=user,
                     hospital=self.cleaned_data['hospital'],
                     blood_type=self.cleaned_data.get('blood_type'),
-                    payment_status=self.cleaned_data.get('payment_status', False),
-                    registration_fee=self.cleaned_data.get('registration_fee', 500.00)
+                    payment_status=self.cleaned_data.get('payment_status', False)
                 )
         return user
 

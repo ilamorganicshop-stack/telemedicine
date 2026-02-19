@@ -9,7 +9,12 @@ class Hospital(models.Model):
     address = models.TextField()
     phone = models.CharField(max_length=20)
     email = models.EmailField()
-    website = models.URLField(blank=True, null=True)
+    appointment_fee = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=1000.00,
+        help_text="Fee per appointment in NPR"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -31,7 +36,6 @@ class DoctorProfile(models.Model):
     license_number = models.CharField(max_length=50, unique=True)
     specialization = models.CharField(max_length=200)
     experience_years = models.PositiveIntegerField()
-    consultation_fee = models.DecimalField(max_digits=10, decimal_places=2)
     bio = models.TextField(blank=True, null=True)
     education = models.TextField(blank=True, null=True)
     is_available = models.BooleanField(default=True)
@@ -72,10 +76,9 @@ class PatientProfile(models.Model):
         blank=True,
         null=True
     )
-    # Payment fields for Khalti integration
-    payment_status = models.BooleanField(default=False, help_text="Whether patient has paid registration fee")
+    # Payment fields - removed registration_fee, now uses hospital appointment_fee
+    payment_status = models.BooleanField(default=False, help_text="Whether patient has paid for appointments")
     khalti_transaction_id = models.CharField(max_length=100, blank=True, null=True, help_text="Khalti transaction reference")
-    registration_fee = models.DecimalField(max_digits=10, decimal_places=2, default=500.00, help_text="Registration fee amount in NPR")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

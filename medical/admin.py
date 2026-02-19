@@ -4,14 +4,14 @@ from .models import Hospital, DoctorProfile, PatientProfile, Appointment, Availa
 
 @admin.register(Hospital)
 class HospitalAdmin(admin.ModelAdmin):
-    list_display = ('name', 'address', 'phone', 'email')
+    list_display = ('name', 'address', 'phone', 'email', 'appointment_fee')
     search_fields = ('name', 'address', 'email')
     list_filter = ('created_at',)
 
 
 @admin.register(DoctorProfile)
 class DoctorProfileAdmin(admin.ModelAdmin):
-    list_display = ('user', 'hospital', 'specialization', 'experience_years', 'consultation_fee', 'is_available')
+    list_display = ('user', 'hospital', 'specialization', 'experience_years', 'is_available')
     list_filter = ('specialization', 'is_available', 'hospital', 'created_at')
     search_fields = ('user__first_name', 'user__last_name', 'specialization', 'license_number')
     readonly_fields = ('created_at', 'updated_at')
