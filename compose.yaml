@@ -10,6 +10,7 @@ services:
       - DEBUG=False
       - SECRET_KEY=${SECRET_KEY:-django-insecure-change-me-in-production}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
+      - DATABASE_URL=postgresql://postgres:${SUPABASE_PASSWORD}@db.slbzulmnmdncvkvdgbyy.supabase.co:5432/postgres
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/"]
       interval: 30s
