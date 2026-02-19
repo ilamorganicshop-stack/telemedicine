@@ -1,7 +1,7 @@
 services:
   telemedicine:
     build:
-      context: .
+      context: https://github.com/ilamorganicshop-stack/telemedicine.git
       dockerfile: Dockerfile
     ports:
       - target: 8000
