@@ -246,3 +246,103 @@ class AppointmentApprovalForm(forms.Form):
             'placeholder': 'Please provide reason for rejection...'
         })
     )
+
+
+class PatientEditForm(forms.ModelForm):
+    hospital = forms.ModelChoiceField(queryset=Hospital.objects.all(), required=True, widget=forms.Select(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}))
+    blood_type = forms.ChoiceField(choices=PatientProfile._meta.get_field('blood_type').choices, required=False, widget=forms.Select(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}))
+    payment_status = forms.BooleanField(required=False, label='Mark as Paid', widget=forms.CheckboxInput(attrs={'class': 'h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded'}))
+    
+    class Meta:
+        model = User
+        fields = ['email', 'first_name', 'last_name', 'phone', 'date_of_birth', 'hospital']
+        widgets = {
+            'email': forms.EmailInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}),
+            'first_name': forms.TextInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}),
+            'last_name': forms.TextInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}),
+            'phone': forms.TextInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}),
+            'date_of_birth': forms.DateInput(attrs={'type': 'date', 'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            try:
+                profile = self.instance.patient_profile
+                self.fields['blood_type'].initial = profile.blood_type
+                self.fields['payment_status'].initial = profile.payment_status
+                if profile.payment_status:
+                    self.fields['payment_status'].widget.attrs['disabled'] = True
+            except PatientProfile.DoesNotExist:
+                pass
+    
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        if commit:
+            user.save()
+            try:
+                profile = user.patient_profile
+                profile.hospital = self.cleaned_data['hospital']
+                profile.blood_type = self.cleaned_data.get('blood_type')
+                if self.cleaned_data.get('payment_status'):
+                    profile.payment_status = True
+                profile.save()
+            except PatientProfile.DoesNotExist:
+                PatientProfile.objects.create(
+                    user=user,
+                    hospital=self.cleaned_data['hospital'],
+                    blood_type=self.cleaned_data.get('blood_type'),
+                    payment_status=self.cleaned_data.get('payment_status', False)
+                )
+        return user
+
+
+class DoctorEditForm(forms.ModelForm):
+    hospital = forms.ModelChoiceField(queryset=Hospital.objects.all(), required=True, widget=forms.Select(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}))
+    license_number = forms.CharField(max_length=50, required=True, widget=forms.TextInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}))
+    specialization = forms.CharField(max_length=200, required=True, widget=forms.TextInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}))
+    experience_years = forms.IntegerField(required=True, widget=forms.NumberInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}))
+    
+    class Meta:
+        model = User
+        fields = ['email', 'first_name', 'last_name', 'phone', 'date_of_birth', 'hospital']
+        widgets = {
+            'email': forms.EmailInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}),
+            'first_name': forms.TextInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}),
+            'last_name': forms.TextInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}),
+            'phone': forms.TextInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}),
+            'date_of_birth': forms.DateInput(attrs={'type': 'date', 'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            try:
+                profile = self.instance.doctor_profile
+                self.fields['license_number'].initial = profile.license_number
+                self.fields['specialization'].initial = profile.specialization
+                self.fields['experience_years'].initial = profile.experience_years
+            except DoctorProfile.DoesNotExist:
+                pass
+    
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.hospital = self.cleaned_data['hospital']
+        if commit:
+            user.save()
+            try:
+                profile = user.doctor_profile
+                profile.hospital = self.cleaned_data['hospital']
+                profile.license_number = self.cleaned_data['license_number']
+                profile.specialization = self.cleaned_data['specialization']
+                profile.experience_years = self.cleaned_data['experience_years']
+                profile.save()
+            except DoctorProfile.DoesNotExist:
+                DoctorProfile.objects.create(
+                    user=user,
+                    hospital=self.cleaned_data['hospital'],
+                    license_number=self.cleaned_data['license_number'],
+                    specialization=self.cleaned_data['specialization'],
+                    experience_years=self.cleaned_data['experience_years']
+                )
+        return user

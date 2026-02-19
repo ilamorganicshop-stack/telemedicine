@@ -674,3 +674,240 @@ def payment_success(request):
         'user': user,
         'transaction_id': patient_profile.khalti_transaction_id
     })
+
+
+# Hospital Admin CRUD Views
+
+@login_required
+@user_passes_test(is_hospital_admin)
+def edit_patient(request, pk):
+    hospital = request.user.hospital
+    patient = get_object_or_404(User, pk=pk, role='patient', hospital=hospital)
+    
+    if request.method == 'POST':
+        from .admin_forms import PatientEditForm
+        form = PatientEditForm(request.POST, instance=patient)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Patient "{patient.email}" updated successfully!')
+            return redirect('accounts:manage_patients')
+    else:
+        from .admin_forms import PatientEditForm
+        form = PatientEditForm(instance=patient)
+        form.fields['hospital'].queryset = Hospital.objects.filter(id=hospital.id)
+        form.fields['hospital'].widget.attrs['disabled'] = True
+    
+    return render(request, 'accounts/edit_patient.html', {'form': form, 'patient': patient})
+
+
+@login_required
+@user_passes_test(is_hospital_admin)
+def delete_patient(request, pk):
+    hospital = request.user.hospital
+    patient = get_object_or_404(User, pk=pk, role='patient', hospital=hospital)
+    
+    if request.method == 'POST':
+        email = patient.email
+        patient.delete()
+        messages.success(request, f'Patient "{email}" deleted successfully!')
+        return redirect('accounts:manage_patients')
+    
+    return render(request, 'accounts/delete_confirm.html', {
+        'object': patient,
+        'object_type': 'Patient',
+        'cancel_url': 'accounts:manage_patients'
+    })
+
+
+@login_required
+@user_passes_test(is_hospital_admin)
+def edit_doctor(request, pk):
+    hospital = request.user.hospital
+    doctor = get_object_or_404(User, pk=pk, role='doctor', hospital=hospital)
+    
+    if request.method == 'POST':
+        from .admin_forms import DoctorEditForm
+        form = DoctorEditForm(request.POST, instance=doctor)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Doctor "{doctor.email}" updated successfully!')
+            return redirect('accounts:manage_doctors')
+    else:
+        from .admin_forms import DoctorEditForm
+        form = DoctorEditForm(instance=doctor)
+        form.fields['hospital'].queryset = Hospital.objects.filter(id=hospital.id)
+        form.fields['hospital'].widget.attrs['disabled'] = True
+    
+    return render(request, 'accounts/edit_doctor.html', {'form': form, 'doctor': doctor})
+
+
+@login_required
+@user_passes_test(is_hospital_admin)
+def delete_doctor(request, pk):
+    hospital = request.user.hospital
+    doctor = get_object_or_404(User, pk=pk, role='doctor', hospital=hospital)
+    
+    if request.method == 'POST':
+        email = doctor.email
+        doctor.delete()
+        messages.success(request, f'Doctor "{email}" deleted successfully!')
+        return redirect('accounts:manage_doctors')
+    
+    return render(request, 'accounts/delete_confirm.html', {
+        'object': doctor,
+        'object_type': 'Doctor',
+        'cancel_url': 'accounts:manage_doctors'
+    })
+
+
+# Super Admin CRUD Views
+
+@login_required
+@user_passes_test(is_super_admin)
+def super_admin_edit_patient(request, pk):
+    patient = get_object_or_404(User, pk=pk, role='patient')
+    
+    if request.method == 'POST':
+        from .admin_forms import PatientEditForm
+        form = PatientEditForm(request.POST, instance=patient)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Patient "{patient.email}" updated successfully!')
+            return redirect('accounts:super_admin_manage_patients')
+    else:
+        from .admin_forms import PatientEditForm
+        form = PatientEditForm(instance=patient)
+    
+    return render(request, 'accounts/edit_patient.html', {'form': form, 'patient': patient})
+
+
+@login_required
+@user_passes_test(is_super_admin)
+def super_admin_delete_patient(request, pk):
+    patient = get_object_or_404(User, pk=pk, role='patient')
+    
+    if request.method == 'POST':
+        email = patient.email
+        patient.delete()
+        messages.success(request, f'Patient "{email}" deleted successfully!')
+        return redirect('accounts:super_admin_manage_patients')
+    
+    return render(request, 'accounts/delete_confirm.html', {
+        'object': patient,
+        'object_type': 'Patient',
+        'cancel_url': 'accounts:super_admin_manage_patients'
+    })
+
+
+@login_required
+@user_passes_test(is_super_admin)
+def super_admin_edit_doctor(request, pk):
+    doctor = get_object_or_404(User, pk=pk, role='doctor')
+    
+    if request.method == 'POST':
+        from .admin_forms import DoctorEditForm
+        form = DoctorEditForm(request.POST, instance=doctor)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Doctor "{doctor.email}" updated successfully!')
+            return redirect('accounts:super_admin_manage_doctors')
+    else:
+        from .admin_forms import DoctorEditForm
+        form = DoctorEditForm(instance=doctor)
+    
+    return render(request, 'accounts/edit_doctor.html', {'form': form, 'doctor': doctor})
+
+
+@login_required
+@user_passes_test(is_super_admin)
+def super_admin_delete_doctor(request, pk):
+    doctor = get_object_or_404(User, pk=pk, role='doctor')
+    
+    if request.method == 'POST':
+        email = doctor.email
+        doctor.delete()
+        messages.success(request, f'Doctor "{email}" deleted successfully!')
+        return redirect('accounts:super_admin_manage_doctors')
+    
+    return render(request, 'accounts/delete_confirm.html', {
+        'object': doctor,
+        'object_type': 'Doctor',
+        'cancel_url': 'accounts:super_admin_manage_doctors'
+    })
+
+
+@login_required
+@user_passes_test(is_super_admin)
+def super_admin_edit_admin(request, pk):
+    admin = get_object_or_404(User, pk=pk, role='admin')
+    
+    if request.method == 'POST':
+        from .admin_forms import HospitalAdminCreationForm
+        form = HospitalAdminCreationForm(request.POST, instance=admin)
+        # Make passwords optional for edit
+        form.fields['password1'].required = False
+        form.fields['password2'].required = False
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Admin "{admin.email}" updated successfully!')
+            return redirect('accounts:super_admin_manage_admins')
+    else:
+        from .admin_forms import HospitalAdminCreationForm
+        form = HospitalAdminCreationForm(instance=admin)
+        form.fields['password1'].required = False
+        form.fields['password2'].required = False
+    
+    return render(request, 'accounts/edit_admin.html', {'form': form, 'admin': admin})
+
+
+@login_required
+@user_passes_test(is_super_admin)
+def super_admin_delete_admin(request, pk):
+    admin = get_object_or_404(User, pk=pk, role='admin')
+    
+    if request.method == 'POST':
+        email = admin.email
+        admin.delete()
+        messages.success(request, f'Admin "{email}" deleted successfully!')
+        return redirect('accounts:super_admin_manage_admins')
+    
+    return render(request, 'accounts/delete_confirm.html', {
+        'object': admin,
+        'object_type': 'Admin',
+        'cancel_url': 'accounts:super_admin_manage_admins'
+    })
+
+
+@login_required
+@user_passes_test(is_super_admin)
+def edit_hospital(request, pk):
+    hospital = get_object_or_404(Hospital, pk=pk)
+    
+    if request.method == 'POST':
+        form = HospitalForm(request.POST, instance=hospital)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Hospital "{hospital.name}" updated successfully!')
+            return redirect('accounts:manage_hospitals')
+    else:
+        form = HospitalForm(instance=hospital)
+    
+    return render(request, 'accounts/edit_hospital.html', {'form': form, 'hospital': hospital})
+
+
+@login_required
+@user_passes_test(is_super_admin)
+def delete_hospital(request, pk):
+    hospital = get_object_or_404(Hospital, pk=pk)
+    
+    if request.method == 'POST':
+        name = hospital.name
+        hospital.delete()
+        messages.success(request, f'Hospital "{name}" deleted successfully!')
+        return redirect('accounts:manage_hospitals')
+    
+    return render(request, 'accounts/delete_confirm.html', {
+        'object': hospital,
+        'object_type': 'Hospital',
+        'cancel_url': 'accounts:manage_hospitals'
+    })
