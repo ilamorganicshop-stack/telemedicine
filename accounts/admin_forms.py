@@ -101,6 +101,8 @@ class PatientCreationForm(forms.ModelForm):
     password2 = forms.CharField(label='Confirm Password', widget=forms.PasswordInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}))
     hospital = forms.ModelChoiceField(queryset=Hospital.objects.all(), required=True, widget=forms.Select(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}))
     blood_type = forms.ChoiceField(choices=PatientProfile._meta.get_field('blood_type').choices, required=False, widget=forms.Select(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}))
+    payment_status = forms.BooleanField(required=False, initial=False, label='Mark as Paid (Registration Fee)', help_text='Check this if patient has already paid. Once marked paid, cannot be changed back to unpaid.', widget=forms.CheckboxInput(attrs={'class': 'h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded'}))
+    registration_fee = forms.DecimalField(max_digits=10, decimal_places=2, initial=500.00, required=True, label='Registration Fee (NPR)', widget=forms.NumberInput(attrs={'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}))
     
     class Meta:
         model = User
@@ -114,6 +116,32 @@ class PatientCreationForm(forms.ModelForm):
             'date_of_birth': forms.DateInput(attrs={'type': 'date', 'class': 'w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500'}),
         }
     
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # If editing existing patient, check current payment status
+        if self.instance and self.instance.pk:
+            try:
+                profile = self.instance.patient_profile
+                if profile.payment_status:
+                    # If already paid, disable the checkbox and show warning
+                    self.fields['payment_status'].widget.attrs['disabled'] = True
+                    self.fields['payment_status'].help_text = 'This patient has already paid. Payment status cannot be changed.'
+            except PatientProfile.DoesNotExist:
+                pass
+    
+    def clean_payment_status(self):
+        payment_status = self.cleaned_data.get('payment_status')
+        # If editing existing patient
+        if self.instance and self.instance.pk:
+            try:
+                profile = self.instance.patient_profile
+                # If already paid, cannot change to unpaid
+                if profile.payment_status and not payment_status:
+                    raise forms.ValidationError("Cannot change payment status from Paid to Unpaid. This patient has already completed payment.")
+            except PatientProfile.DoesNotExist:
+                pass
+        return payment_status
+    
     def clean_password2(self):
         password1 = self.cleaned_data.get('password1')
         password2 = self.cleaned_data.get('password2')
@@ -123,16 +151,32 @@ class PatientCreationForm(forms.ModelForm):
     
     def save(self, commit=True):
         user = super().save(commit=False)
-        user.set_password(self.cleaned_data['password1'])
+        # Only set password if provided (for new patients)
+        if self.cleaned_data.get('password1'):
+            user.set_password(self.cleaned_data['password1'])
         user.role = 'patient'
         if commit:
             user.save()
-            # Create patient profile
-            PatientProfile.objects.create(
-                user=user,
-                hospital=self.cleaned_data['hospital'],
-                blood_type=self.cleaned_data.get('blood_type')
-            )
+            # Get or create patient profile
+            try:
+                profile = user.patient_profile
+                # Update existing profile
+                profile.hospital = self.cleaned_data['hospital']
+                profile.blood_type = self.cleaned_data.get('blood_type')
+                profile.registration_fee = self.cleaned_data.get('registration_fee', 500.00)
+                # Only update payment_status if it's being set to True (paid)
+                if self.cleaned_data.get('payment_status'):
+                    profile.payment_status = True
+                profile.save()
+            except PatientProfile.DoesNotExist:
+                # Create new profile
+                PatientProfile.objects.create(
+                    user=user,
+                    hospital=self.cleaned_data['hospital'],
+                    blood_type=self.cleaned_data.get('blood_type'),
+                    payment_status=self.cleaned_data.get('payment_status', False),
+                    registration_fee=self.cleaned_data.get('registration_fee', 500.00)
+                )
         return user
 
 

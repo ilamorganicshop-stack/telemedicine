@@ -6,6 +6,10 @@ from django.contrib import messages
 from django.urls import reverse_lazy
 from django.views.generic import CreateView
 from django.utils import timezone
+from django.conf import settings
+from django.http import JsonResponse
+import requests
+import json
 from .forms import UserCreationForm
 from .admin_forms import HospitalForm, HospitalAdminCreationForm, DoctorCreationForm, PatientCreationForm, AdminAppointmentBookingForm, AppointmentApprovalForm
 from .models import User
@@ -57,6 +61,20 @@ def login_view(request):
             if authenticated_user is not None:
                 login(request, authenticated_user)
                 messages.success(request, f'Welcome back, {authenticated_user.username}!')
+                
+                # Check if user is a patient and payment status
+                if authenticated_user.is_patient:
+                    try:
+                        patient_profile = authenticated_user.patient_profile
+                        if not patient_profile.payment_status:
+                            # Patient hasn't paid, redirect to payment page
+                            messages.info(request, 'Please complete your registration payment to access the dashboard.')
+                            return redirect('accounts:khalti_payment')
+                    except PatientProfile.DoesNotExist:
+                        # No profile exists, redirect to payment
+                        messages.info(request, 'Please complete your registration payment to access the dashboard.')
+                        return redirect('accounts:khalti_payment')
+                
                 return redirect('accounts:dashboard')
             messages.error(request, 'Invalid username or password. Please try again.')
     
@@ -523,4 +541,120 @@ def approve_reject_appointment(request, appointment_id):
     return render(request, 'accounts/approve_reject_appointment.html', {
         'appointment': appointment,
         'form': form
+    })
+
+
+# Khalti Payment Views
+
+@login_required
+def khalti_payment(request):
+    """Display Khalti payment page for unpaid patients"""
+    user = request.user
+    
+    # Only patients need to pay
+    if not user.is_patient:
+        return redirect('accounts:dashboard')
+    
+    try:
+        patient_profile = user.patient_profile
+        # If already paid, redirect to dashboard
+        if patient_profile.payment_status:
+            return redirect('accounts:dashboard')
+        
+        context = {
+            'khalti_public_key': settings.KHALTI_PUBLIC_KEY,
+            'registration_fee': patient_profile.registration_fee,
+            'user': user,
+        }
+        return render(request, 'accounts/khalti_payment.html', context)
+        
+    except PatientProfile.DoesNotExist:
+        messages.error(request, 'Patient profile not found. Please contact support.')
+        return redirect('accounts:login')
+
+
+@login_required
+def khalti_verify(request):
+    """Verify Khalti payment and update patient status"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST method allowed'}, status=405)
+    
+    user = request.user
+    
+    if not user.is_patient:
+        return JsonResponse({'error': 'Only patients can make payments'}, status=403)
+    
+    try:
+        patient_profile = user.patient_profile
+        if patient_profile.payment_status:
+            return JsonResponse({'error': 'Payment already completed'}, status=400)
+    except PatientProfile.DoesNotExist:
+        return JsonResponse({'error': 'Patient profile not found'}, status=404)
+    
+    # Get token from request
+    data = json.loads(request.body)
+    token = data.get('token')
+    amount = data.get('amount')
+    
+    if not token:
+        return JsonResponse({'error': 'Token is required'}, status=400)
+    
+    # Verify payment with Khalti API
+    url = settings.KHALTI_VERIFY_URL
+    payload = {
+        'token': token,
+        'amount': amount
+    }
+    headers = {
+        'Authorization': f'Key {settings.KHALTI_SECRET_KEY}'
+    }
+    
+    try:
+        response = requests.post(url, data=payload, headers=headers)
+        response_data = response.json()
+        
+        if response.status_code == 200 and response_data.get('idx'):
+            # Payment successful
+            patient_profile.payment_status = True
+            patient_profile.khalti_transaction_id = response_data.get('idx')
+            patient_profile.save()
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Payment verified successfully',
+                'redirect_url': '/accounts/payment/success/'
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': response_data.get('detail', 'Payment verification failed')
+            }, status=400)
+            
+    except requests.exceptions.RequestException as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Payment verification error: {str(e)}'
+        }, status=500)
+
+
+@login_required
+def payment_success(request):
+    """Display payment success page and redirect to dashboard"""
+    user = request.user
+    
+    if not user.is_patient:
+        return redirect('accounts:dashboard')
+    
+    try:
+        patient_profile = user.patient_profile
+        if not patient_profile.payment_status:
+            messages.error(request, 'Payment not completed.')
+            return redirect('accounts:khalti_payment')
+    except PatientProfile.DoesNotExist:
+        return redirect('accounts:login')
+    
+    messages.success(request, 'Payment completed successfully! Welcome to your dashboard.')
+    return render(request, 'accounts/payment_success.html', {
+        'user': user,
+        'transaction_id': patient_profile.khalti_transaction_id
     })

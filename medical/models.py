@@ -71,6 +71,9 @@ class PatientProfile(models.Model):
         blank=True,
         null=True
     )
+    payment_status = models.BooleanField(default=False, help_text="Whether the patient has paid the registration fee")
+    khalti_transaction_id = models.CharField(max_length=100, blank=True, null=True, help_text="Khalti transaction ID for verification")
+    registration_fee = models.DecimalField(max_digits=10, decimal_places=2, default=500.00, help_text="Registration fee amount in NPR")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

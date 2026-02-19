@@ -34,4 +34,9 @@ urlpatterns = [
     # Doctor Appointment Approval URLs
     path('doctor/pending-appointments/', views.pending_appointments, name='pending_appointments'),
     path('doctor/approve-reject/<int:appointment_id>/', views.approve_reject_appointment, name='approve_reject_appointment'),
+    
+    # Khalti Payment URLs
+    path('payment/', views.khalti_payment, name='khalti_payment'),
+    path('payment/verify/', views.khalti_verify, name='khalti_verify'),
+    path('payment/success/', views.payment_success, name='payment_success'),
 ]

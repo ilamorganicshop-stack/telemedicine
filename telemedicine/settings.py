@@ -150,3 +150,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Custom User Model
 AUTH_USER_MODEL = "accounts.User"
+
+# Khalti Payment Gateway Configuration
+KHALTI_PUBLIC_KEY = os.environ.get("KHALTI_PUBLIC_KEY", "test_public_key_dc74e0fd57cb46cd93832aee0a390234")
+KHALTI_SECRET_KEY = os.environ.get("KHALTI_SECRET_KEY", "test_secret_key_f59e8b7d18b4499ca40f68195a846e9b")
+KHALTI_VERIFY_URL = "https://khalti.com/api/v2/payment/verify/"
