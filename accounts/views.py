@@ -571,9 +571,19 @@ def khalti_payment(request):
         if patient_profile.payment_status:
             return redirect('accounts:dashboard')
         
+        # Check if already tried payment initiation (prevent redirect loop)
+        if request.session.get('payment_init_attempted'):
+            # Clear flag and show error page
+            del request.session['payment_init_attempted']
+            messages.error(request, 'Payment initiation failed. Please contact support.')
+            return render(request, 'accounts/payment_error.html', {'user': user})
+        
         hospital = patient_profile.hospital
         appointment_fee = hospital.appointment_fee if hospital else 1000.00
         amount_in_paisa = int(appointment_fee * 100)
+        
+        # Mark that we're attempting payment
+        request.session['payment_init_attempted'] = True
         
         # Initiate payment with Khalti ePayment API
         url = settings.KHALTI_GATEWAY_URL
@@ -581,7 +591,7 @@ def khalti_payment(request):
             "return_url": request.build_absolute_uri(reverse('accounts:khalti_verify')),
             "website_url": request.build_absolute_uri('/'),
             "amount": amount_in_paisa,
-            "purchase_order_id": f"PATIENT-{user.id}-{timezone.now().timestamp()}",
+            "purchase_order_id": f"PATIENT-{user.id}-{int(timezone.now().timestamp())}",
             "purchase_order_name": "Appointment Fee",
             "customer_info": {
                 "name": f"{user.first_name} {user.last_name}",
@@ -595,24 +605,39 @@ def khalti_payment(request):
             'Content-Type': 'application/json',
         }
         
-        response = requests.post(url, json=payload, headers=headers)
+        response = requests.post(url, json=payload, headers=headers, timeout=10)
         response_data = response.json()
         
         if response.status_code == 200 and response_data.get('payment_url'):
+            # Clear attempt flag on success
+            del request.session['payment_init_attempted']
             # Store pidx in session for verification
             request.session['khalti_pidx'] = response_data.get('pidx')
             # Redirect to Khalti payment page
             return redirect(response_data['payment_url'])
         else:
-            messages.error(request, f"Payment initiation failed: {response_data.get('detail', 'Unknown error')}")
-            return redirect('accounts:dashboard')
+            # Clear attempt flag
+            del request.session['payment_init_attempted']
+            error_msg = response_data.get('detail') or response_data.get('error_message') or 'Unknown error'
+            messages.error(request, f"Payment initiation failed: {error_msg}")
+            return render(request, 'accounts/payment_error.html', {
+                'user': user,
+                'error': error_msg,
+                'response': response_data
+            })
             
     except PatientProfile.DoesNotExist:
         messages.error(request, 'Patient profile not found. Please contact support.')
         return redirect('accounts:login')
     except Exception as e:
+        # Clear attempt flag
+        if 'payment_init_attempted' in request.session:
+            del request.session['payment_init_attempted']
         messages.error(request, f'Payment error: {str(e)}')
-        return redirect('accounts:dashboard')
+        return render(request, 'accounts/payment_error.html', {
+            'user': user,
+            'error': str(e)
+        })
 
 
 @login_required
