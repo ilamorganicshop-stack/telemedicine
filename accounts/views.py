@@ -454,10 +454,7 @@ def book_appointment(request):
         form = AdminAppointmentBookingForm(request.POST, hospital=hospital)
         if form.is_valid():
             appointment = form.save(commit=False)
-            appointment.requested_by_admin = request.user
-            # Also track admin hospital for reference
-            if request.user.hospital:
-                appointment.hospital = request.user.hospital
+            appointment.requested_by = request.user
             appointment.hospital = hospital
             appointment.status = 'requested'
             appointment.save()
@@ -480,7 +477,7 @@ def manage_appointments(request):
     
     appointments = Appointment.objects.filter(
         hospital=hospital,
-        requested_by_admin__isnull=False
+        requested_by__isnull=False
     ).order_by('-created_at')
     
     return render(request, 'accounts/manage_appointments.html', {'appointments': appointments})
