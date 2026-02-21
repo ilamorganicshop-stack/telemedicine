@@ -159,8 +159,9 @@ AUTH_USER_MODEL = "accounts.User"
 # Khalti Payment Gateway Configuration (ePayment API v2)
 KHALTI_PUBLIC_KEY = os.environ.get("KHALTI_PUBLIC_KEY", "117e2f1f48d84b52a47ef8fdf4623f5f")
 KHALTI_SECRET_KEY = os.environ.get("KHALTI_SECRET_KEY", "1753221752054f0bbed8c345b7dd6b65")
-KHALTI_GATEWAY_URL = "https://khalti.com/api/v2/epayment/initiate/"
-KHALTI_VERIFY_URL = "https://khalti.com/api/v2/epayment/lookup/"
+# Use test environment for now
+KHALTI_GATEWAY_URL = "https://a.khalti.com/api/v2/epayment/initiate/"
+KHALTI_VERIFY_URL = "https://a.khalti.com/api/v2/epayment/lookup/"
 
 
 
