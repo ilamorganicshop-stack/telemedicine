@@ -11,6 +11,9 @@ services:
       - SECRET_KEY=${SECRET_KEY:-django-insecure-change-me-in-production}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
       - DATABASE_URL=postgresql://postgres.slbzulmnmdncvkvdgbyy:301197997Mom%40@aws-1-ap-south-1.pooler.supabase.com:6543/postgres
+      - KHALTI_PUBLIC_KEY=${KHALTI_PUBLIC_KEY:-12147a6741134e3685b25a9948fdcf42}
+      - KHALTI_SECRET_KEY=${KHALTI_SECRET_KEY:-638d4c0a1d2b4f1d94430254e6683d35}
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/"]
       interval: 30s
