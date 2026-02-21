@@ -1,0 +1,48 @@
+{% extends 'accounts/doctor_base.html' %}
+
+{% block title %}My Patients - Telemedicine System{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6 lg:p-8">
+    <div class="mb-6">
+        <h1 class="text-3xl font-bold text-gray-900">My Patients</h1>
+        <p class="text-gray-600 mt-2">Patients you have consulted with</p>
+    </div>
+
+    {% if patients %}
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {% for patient in patients %}
+        <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6">
+            <div class="flex items-center mb-4">
+                <div class="h-12 w-12 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
+                    {{ patient.first_name.0 }}{{ patient.last_name.0 }}
+                </div>
+                <div class="ml-4">
+                    <h3 class="text-lg font-semibold text-gray-900">
+                        {{ patient.first_name }} {{ patient.last_name }}
+                    </h3>
+                    <p class="text-sm text-gray-600">Patient</p>
+                </div>
+            </div>
+            
+            <div class="space-y-2 text-sm text-gray-600">
+                <p><strong>Email:</strong> {{ patient.email }}</p>
+                <p><strong>Phone:</strong> {{ patient.phone|default:"Not provided" }}</p>
+                {% if patient.patient_profile %}
+                <p><strong>Blood Type:</strong> {{ patient.patient_profile.blood_type|default:"Not provided" }}</p>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="bg-white rounded-lg shadow-md p-12 text-center">
+        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+        </svg>
+        <h3 class="mt-2 text-sm font-medium text-gray-900">No patients yet</h3>
+        <p class="mt-1 text-sm text-gray-500">Complete appointments to see your patients here.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

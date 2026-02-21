@@ -1,5 +1,3 @@
-import json
-import uuid
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -9,9 +7,42 @@ from django.contrib.auth import get_user_model
 from django.http import JsonResponse
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
+from django.utils.dateparse import parse_datetime
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+from datetime import datetime
+import os
+import json
+import uuid
 from .models import Hospital, DoctorProfile, PatientProfile, Appointment, Availability, ChatMessage
 
 User = get_user_model()
+MAX_CHAT_ATTACHMENT_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
+def _serialize_chat_message(message, current_user):
+    local_timestamp = timezone.localtime(message.created_at)
+    attachment_url = message.attachment.url if message.attachment else None
+    attachment_name = os.path.basename(message.attachment.name) if message.attachment else None
+    attachment_size = message.attachment.size if message.attachment else 0
+    extension = os.path.splitext(message.attachment.name)[1].lower() if message.attachment else ''
+    is_image = extension in {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'}
+
+    return {
+        'id': message.id,
+        'message_id': message.id,
+        'message': message.message,
+        'sender': f"{message.sender.first_name} {message.sender.last_name}",
+        'sender_id': message.sender.id,
+        'created_at': local_timestamp.isoformat(),
+        'created_at_display': local_timestamp.strftime('%I:%M %p').lstrip('0'),
+        'is_self': message.sender_id == current_user.id,
+        'has_attachment': bool(message.attachment),
+        'attachment_url': attachment_url,
+        'attachment_name': attachment_name,
+        'attachment_size': attachment_size,
+        'is_image': is_image,
+    }
 
 
 @login_required
@@ -271,6 +302,36 @@ def chat_view(request, appointment_id):
 
 
 @login_required
+def doctor_chatbox(request, appointment_id):
+    """Dedicated chatbox for doctor"""
+    appointment = get_object_or_404(
+        Appointment.objects.select_related('patient', 'doctor', 'hospital'),
+        id=appointment_id
+    )
+    
+    if request.user != appointment.doctor:
+        messages.error(request, "Access denied.")
+        return redirect('accounts:dashboard')
+    
+    return render(request, 'medical/doctor_chatbox.html', {'appointment': appointment})
+
+
+@login_required
+def patient_chatbox(request, appointment_id):
+    """Dedicated chatbox for patient"""
+    appointment = get_object_or_404(
+        Appointment.objects.select_related('patient', 'doctor', 'hospital'),
+        id=appointment_id
+    )
+    
+    if request.user != appointment.patient:
+        messages.error(request, "Access denied.")
+        return redirect('accounts:dashboard')
+    
+    return render(request, 'medical/patient_chatbox.html', {'appointment': appointment})
+
+
+@login_required
 def send_message(request, appointment_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'Only POST method allowed'}, status=405)
@@ -283,24 +344,36 @@ def send_message(request, appointment_id):
         return JsonResponse({'error': 'Permission denied'}, status=403)
     
     message_text = request.POST.get('message', '').strip()
-    if not message_text:
-        return JsonResponse({'error': 'Message cannot be empty'}, status=400)
+    attachment = request.FILES.get('attachment')
+
+    if not message_text and not attachment:
+        return JsonResponse({'error': 'Message cannot be empty.'}, status=400)
+
+    if attachment and attachment.size > MAX_CHAT_ATTACHMENT_SIZE:
+        return JsonResponse({'error': 'File size must be 10MB or less.'}, status=400)
     
-    # Create message
     message = ChatMessage.objects.create(
         appointment=appointment,
         sender=user,
-        message=message_text
+        message=message_text,
+        attachment=attachment
     )
-    
-    return JsonResponse({
-        'success': True,
-        'message_id': message.id,
-        'message': message.message,
-        'sender': f"{message.sender.first_name} {message.sender.last_name}",
-        'created_at': message.created_at.strftime('%Y-%m-%d %H:%M:%S'),
-        'is_self': message.sender == user
-    })
+
+    response_payload = _serialize_chat_message(message, user)
+    response_payload['success'] = True
+
+    channel_layer = get_channel_layer()
+    if channel_layer:
+        async_to_sync(channel_layer.group_send)(
+            f'chat_{appointment.id}',
+            {
+                'type': 'chat_message',
+                **response_payload,
+                'sender_name': response_payload['sender'],
+            }
+        )
+
+    return JsonResponse(response_payload)
 
 
 @login_required
@@ -318,22 +391,21 @@ def get_chat_messages(request, appointment_id):
     messages_query = ChatMessage.objects.filter(appointment=appointment).select_related('sender')
     
     if since:
-        try:
-            since_time = timezone.datetime.fromisoformat(since)
+        normalized_since = since.strip()
+        if ' ' in normalized_since and '+' not in normalized_since and 'T' in normalized_since:
+            date_part, offset_part = normalized_since.rsplit(' ', 1)
+            if ':' in offset_part:
+                normalized_since = f'{date_part}+{offset_part}'
+
+        since_time = parse_datetime(normalized_since)
+        if since_time:
+            if timezone.is_naive(since_time):
+                since_time = timezone.make_aware(since_time)
             messages_query = messages_query.filter(created_at__gt=since_time)
-        except ValueError:
-            pass
     
     messages_query = messages_query.order_by('created_at')
     
-    messages_data = [{
-        'id': msg.id,
-        'message': msg.message,
-        'sender': f"{msg.sender.first_name} {msg.sender.last_name}",
-        'sender_id': msg.sender.id,
-        'created_at': msg.created_at.strftime('%Y-%m-%d %H:%M:%S'),
-        'is_self': msg.sender == user
-    } for msg in messages_query]
+    messages_data = [_serialize_chat_message(msg, user) for msg in messages_query]
     
     return JsonResponse({
         'success': True,
@@ -353,32 +425,20 @@ def video_call_view(request, appointment_id):
     
     user = request.user
     
-    # Check permissions
     if not (user == appointment.patient or user == appointment.doctor):
         messages.error(request, "You don't have permission to join this video call.")
-        return redirect('dashboard')
+        return redirect('accounts:dashboard')
     
-    # Determine user type
     user_type = 'doctor' if user == appointment.doctor else 'patient'
+
+    # Ensure both participants can join the same room even if patient joins first.
+    if not appointment.video_call_room_id:
+        appointment.generate_room_id()
+        appointment.save()
     
-    # Validate token
-    token = request.GET.get('token')
-    valid_token = False
-    
-    if user_type == 'doctor' and token == appointment.doctor_token:
-        valid_token = appointment.is_token_valid('doctor')
-    elif user_type == 'patient' and token == appointment.patient_token:
-        valid_token = appointment.is_token_valid('patient')
-    
-    if not valid_token:
-        messages.error(request, "Invalid or expired access token.")
-        return redirect('medical:chat', appointment_id=appointment.id)
-    
-    # If doctor is joining, mark call as in progress
     if user_type == 'doctor' and appointment.video_call_status == 'waiting':
         appointment.start_video_call()
     
-    # Get WebRTC configuration
     webrtc_config = {
         'stun_servers': settings.WEBRTC_STUN_SERVERS,
         'turn_servers': settings.WEBRTC_TURN_SERVERS,
@@ -398,45 +458,36 @@ def start_video_call(request, appointment_id):
     appointment = get_object_or_404(Appointment, id=appointment_id)
     user = request.user
     
-    # Only doctor can start the call
     if user != appointment.doctor:
         messages.error(request, "Only the doctor can start the video call.")
-        return redirect('medical:chat', appointment_id=appointment.id)
+        return redirect('medical:doctor_chatbox', appointment_id=appointment.id)
     
-    # Generate room ID and tokens if not already created
     if not appointment.video_call_room_id:
         appointment.generate_room_id()
-    
-    if not appointment.doctor_token or not appointment.patient_token:
-        appointment.generate_tokens()
         appointment.save()
     
-    # Set status to waiting (patient needs to join)
     appointment.video_call_status = 'waiting'
     appointment.save()
     
-    # Redirect doctor to video call room
-    return redirect(f'/medical/appointments/{appointment.id}/video-call/?token={appointment.doctor_token}')
+    return redirect(f'/medical/appointments/{appointment.id}/video-call/')
 
 
 @login_required
 def join_video_call(request, appointment_id):
-    """Patient joins video call with token"""
+    """Patient joins video call"""
     appointment = get_object_or_404(Appointment, id=appointment_id)
     user = request.user
     
-    # Only patient can join with this endpoint
     if user != appointment.patient:
         messages.error(request, "Invalid access.")
-        return redirect('dashboard')
-    
-    # Check if call has been started by doctor
-    if appointment.video_call_status == 'not_started':
-        messages.info(request, "The doctor has not started the video call yet. Please wait.")
-        return redirect('medical:chat', appointment_id=appointment.id)
-    
-    # Redirect patient to video call room with their token
-    return redirect(f'/medical/appointments/{appointment.id}/video-call/?token={appointment.patient_token}')
+        return redirect('accounts:dashboard')
+
+    # Patient can enter the call screen anytime and wait for doctor.
+    if not appointment.video_call_room_id:
+        appointment.generate_room_id()
+        appointment.save()
+
+    return redirect(f'/medical/appointments/{appointment.id}/video-call/')
 
 
 @login_required
@@ -445,51 +496,26 @@ def end_video_call(request, appointment_id):
     appointment = get_object_or_404(Appointment, id=appointment_id)
     user = request.user
     
-    # Check permissions
     if not (user == appointment.patient or user == appointment.doctor):
         messages.error(request, "Permission denied.")
-        return redirect('dashboard')
+        return redirect('accounts:dashboard')
     
-    # End the call
     if appointment.video_call_status == 'in_progress':
         appointment.end_video_call()
         messages.success(request, "Video call ended.")
     else:
         messages.info(request, "Video call was already ended.")
     
-    return redirect('medical:chat', appointment_id=appointment.id)
+    if user == appointment.doctor:
+        return redirect('medical:doctor_chatbox', appointment_id=appointment.id)
+    else:
+        return redirect('medical:patient_chatbox', appointment_id=appointment.id)
 
 
 @login_required
 def test_devices(request):
     """Pre-call camera and microphone test page"""
     return render(request, 'medical/video_call_test.html')
-
-
-@csrf_exempt
-def video_call_signal(request, appointment_id):
-    """WebRTC signaling endpoint for AJAX-based signaling (fallback)"""
-    if request.method != 'POST':
-        return JsonResponse({'error': 'Only POST allowed'}, status=405)
-    
-    try:
-        data = json.loads(request.body)
-        signal_type = data.get('type')
-        
-        # In a production environment, you would broadcast this signal
-        # to the other peer via WebSocket or another real-time mechanism
-        # For now, we return success and let the WebSocket handle real-time signaling
-        
-        return JsonResponse({
-            'success': True,
-            'type': signal_type,
-            'message': 'Signal received'
-        })
-        
-    except json.JSONDecodeError:
-        return JsonResponse({'error': 'Invalid JSON'}, status=400)
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
 
 
 @login_required
@@ -512,13 +538,17 @@ def get_video_call_status(request, appointment_id):
 @login_required
 def waiting_lobby(request, appointment_id):
     """
-    Waiting lobby view for patients before joining a video call.
+    Waiting lobby view for patients/doctors before joining a video call.
     Shows a countdown timer until the appointment time.
     """
     appointment = get_object_or_404(Appointment, id=appointment_id)
     
-    # Check if user is the patient for this appointment
-    if request.user != appointment.patient:
+    # Check if user is the patient or doctor for this appointment
+    if request.user == appointment.patient:
+        template = 'medical/waiting_lobby.html'
+    elif request.user == appointment.doctor:
+        template = 'medical/doctor_waiting_lobby.html'
+    else:
         messages.error(request, 'You do not have permission to access this waiting lobby.')
         return redirect('accounts:dashboard')
     
@@ -533,8 +563,65 @@ def waiting_lobby(request, appointment_id):
     
     context = {
         'appointment': appointment,
-        'time_until_appointment': max(0, time_until_appointment),  # Don't show negative time
-        'can_join': time_until_appointment <= 300,  # Can join 5 minutes before
+        'time_until_appointment': max(0, time_until_appointment),
+        'can_join': time_until_appointment <= 300,
     }
     
-    return render(request, 'medical/waiting_lobby.html', context)
+    return render(request, template, context)
+
+
+@login_required
+def doctor_patients(request):
+    """View list of patients assigned to the doctor"""
+    if not request.user.is_doctor:
+        messages.error(request, 'Access denied.')
+        return redirect('accounts:dashboard')
+    
+    # Get unique patients from completed appointments
+    patients = User.objects.filter(
+        role='patient',
+        patient_appointments__doctor=request.user,
+        patient_appointments__status='completed'
+    ).distinct().select_related('patient_profile')
+    
+    return render(request, 'medical/doctor_patients.html', {'patients': patients})
+
+
+@login_required
+def update_appointment_time(request, appointment_id):
+    """Update appointment time for testing purposes"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST allowed'}, status=405)
+    
+    appointment = get_object_or_404(Appointment, id=appointment_id)
+    
+    # Check permissions
+    if not (request.user == appointment.patient or request.user == appointment.doctor or request.user.is_admin_user):
+        return JsonResponse({'error': 'Permission denied'}, status=403)
+    
+    try:
+        data = json.loads(request.body)
+        new_time_str = data.get('appointment_date')
+        
+        if not new_time_str:
+            return JsonResponse({'error': 'No appointment date provided'}, status=400)
+        
+        # Parse the datetime string
+        new_time = datetime.fromisoformat(new_time_str.replace('Z', '+00:00'))
+        
+        # Make timezone aware if needed
+        if timezone.is_naive(new_time):
+            new_time = timezone.make_aware(new_time)
+        
+        appointment.appointment_date = new_time
+        appointment.save()
+        
+        return JsonResponse({
+            'success': True,
+            'new_time': appointment.appointment_date.isoformat()
+        })
+        
+    except (ValueError, json.JSONDecodeError) as e:
+        return JsonResponse({'error': f'Invalid date format: {str(e)}'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)

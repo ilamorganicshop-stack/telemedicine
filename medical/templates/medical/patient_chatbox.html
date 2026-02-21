@@ -1,0 +1,442 @@
+{% extends 'accounts/patient_base.html' %}
+
+{% block title %}Chat - Dr. {{ appointment.doctor.first_name }} {{ appointment.doctor.last_name }}{% endblock %}
+
+{% block content %}
+<style>
+    .chat-bg {
+        background-color: #e5ddd5;
+        background-image: 
+            linear-gradient(45deg, #f0f0f0 25%, transparent 25%),
+            linear-gradient(-45deg, #f0f0f0 25%, transparent 25%),
+            linear-gradient(45deg, transparent 75%, #f0f0f0 75%),
+            linear-gradient(-45deg, transparent 75%, #f0f0f0 75%);
+        background-size: 20px 20px;
+        background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+    }
+</style>
+
+<div class="h-[calc(100vh-4rem)] flex flex-col bg-white">
+    <div class="bg-white px-4 py-4 shadow-lg flex justify-between items-center border-b border-gray-200">
+        <div class="flex items-center gap-3 flex-1 min-w-0">
+            <a href="{% url 'accounts:dashboard' %}" class="text-gray-700 hover:bg-gray-100 rounded-full p-2 transition-colors flex-shrink-0">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+            </a>
+            <div class="min-w-0 flex-1">
+                <h2 class="text-lg sm:text-xl font-bold truncate text-gray-900">
+                    Dr. {{ appointment.doctor.first_name }} {{ appointment.doctor.last_name }}
+                </h2>
+                <p class="text-xs sm:text-sm truncate text-gray-600">{{ appointment.doctor.doctor_profile.specialization }}</p>
+                <p id="presence-status" class="text-xs sm:text-sm text-yellow-600">Connecting...</p>
+                <p id="typing-status" class="text-xs sm:text-sm text-blue-600 hidden"></p>
+            </div>
+        </div>
+        <button onclick="joinCall()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+            Join Call
+        </button>
+    </div>
+
+    <div class="flex-1 overflow-hidden chat-bg">
+        <div id="chat-messages" class="h-full overflow-y-auto p-4 space-y-3">
+            <div class="text-center text-gray-600 py-8">
+                <div class="inline-block bg-white rounded-lg shadow-sm px-4 py-3">
+                    <svg class="w-12 h-12 mx-auto text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                    <p class="text-gray-900 font-medium text-sm">No messages yet</p>
+                    <p class="text-xs text-gray-600 mt-1">Start a conversation with your doctor</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-gray-100 px-4 py-3 shadow-lg border-t border-gray-200">
+        <form id="chat-form" class="flex gap-3 items-end">
+            <div class="flex-1">
+                <input type="file" id="attachment-input" class="hidden" accept="image/*,.pdf,.doc,.docx,.txt,.csv,.zip,.rar">
+                <div class="relative">
+                    <button
+                        type="button"
+                        id="attachment-btn"
+                        class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-blue-600 transition-colors"
+                        aria-label="Attach file">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16.5 6.5l-7.79 7.79a3 3 0 104.24 4.24l8.49-8.49a5 5 0 10-7.07-7.07L5.88 11.46a7 7 0 109.9 9.9l7.07-7.07" />
+                        </svg>
+                    </button>
+                    <input 
+                        type="text" 
+                        id="message-input" 
+                        placeholder="Type a message" 
+                        class="w-full rounded-full border border-gray-300 pl-12 pr-5 py-3 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white">
+                </div>
+                <p id="attachment-meta" class="hidden mt-1 text-xs text-gray-600"></p>
+            </div>
+            <button 
+                type="submit" 
+                class="bg-blue-600 text-white rounded-full p-3 hover:bg-blue-700 transition-colors shadow-md hover:shadow-lg flex-shrink-0">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+    const appointmentId = {{ appointment.id }};
+    const otherUserId = {{ appointment.doctor.id }};
+    const wsScheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const chatSocketUrl = `${wsScheme}://${window.location.host}/ws/chat/${appointmentId}/`;
+
+    const chatMessages = document.getElementById('chat-messages');
+    const chatForm = document.getElementById('chat-form');
+    const messageInput = document.getElementById('message-input');
+    const attachmentInput = document.getElementById('attachment-input');
+    const attachmentButton = document.getElementById('attachment-btn');
+    const attachmentMeta = document.getElementById('attachment-meta');
+    const presenceStatus = document.getElementById('presence-status');
+    const typingStatus = document.getElementById('typing-status');
+    const knownMessageIds = new Set();
+    const maxAttachmentBytes = 10 * 1024 * 1024;
+
+    let chatSocket = null;
+    let reconnectTimer = null;
+    let pollingTimer = null;
+    let typingTimeout = null;
+    let isLocallyTyping = false;
+    
+    function joinCall() {
+        window.location.href = `/medical/appointments/${appointmentId}/video-call/join/`;
+    }
+
+    function setPresenceLabel(label, className) {
+        presenceStatus.textContent = label;
+        presenceStatus.className = `text-xs sm:text-sm ${className}`;
+    }
+
+    function updatePresence(onlineUserIds = []) {
+        const onlineIds = new Set(onlineUserIds.map((id) => Number(id)));
+        if (onlineIds.has(otherUserId)) {
+            setPresenceLabel('Online', 'text-green-600');
+        } else {
+            setPresenceLabel('Offline', 'text-gray-500');
+        }
+    }
+
+    function showTypingStatus(senderName) {
+        typingStatus.textContent = `${senderName} is typing...`;
+        typingStatus.classList.remove('hidden');
+    }
+
+    function hideTypingStatus() {
+        typingStatus.textContent = '';
+        typingStatus.classList.add('hidden');
+    }
+
+    function loadMessages() {
+        fetch(`/medical/appointments/${appointmentId}/get-messages/`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    data.messages.forEach(addMessageToChat);
+                    scrollChatToBottom();
+                }
+            })
+            .catch(error => console.error('Error loading messages:', error));
+    }
+
+    function startPolling() {
+        if (pollingTimer) return;
+        pollingTimer = setInterval(loadMessages, 2000);
+    }
+
+    function addMessageToChat(message) {
+        const placeholder = chatMessages.querySelector('.text-center.text-gray-600');
+        if (placeholder) placeholder.remove();
+        
+        const messageId = Number(message.id);
+        if (knownMessageIds.has(messageId)) return;
+        knownMessageIds.add(messageId);
+        
+        const messageDiv = document.createElement('div');
+        messageDiv.id = `msg-${messageId}`;
+        messageDiv.className = `flex ${message.is_self ? 'justify-end' : 'justify-start'}`;
+        
+        const bubbleClass = message.is_self ? 'bg-blue-600 text-white' : 'bg-white text-gray-900';
+        const messageTime = message.created_at_display || formatTime(message.created_at);
+        const messageText = (message.message || '').trim();
+        const hasAttachment = Boolean(message.has_attachment && message.attachment_url);
+
+        let attachmentHtml = '';
+        if (hasAttachment) {
+            const safeAttachmentUrl = escapeHtml(message.attachment_url);
+            const safeAttachmentName = escapeHtml(message.attachment_name || 'Attachment');
+            const attachmentSize = message.attachment_size ? formatFileSize(Number(message.attachment_size)) : '';
+            const attachmentCardClass = message.is_self
+                ? 'bg-blue-500/50 border border-blue-300/50 text-white'
+                : 'bg-gray-50 border border-gray-200 text-gray-900';
+            const attachmentMetaClass = message.is_self ? 'text-blue-100' : 'text-gray-500';
+
+            if (message.is_image) {
+                attachmentHtml += `
+                    <a href="${safeAttachmentUrl}" target="_blank" rel="noopener noreferrer" class="block">
+                        <img src="${safeAttachmentUrl}" alt="${safeAttachmentName}" class="max-h-56 w-auto rounded-lg object-cover border border-black/10">
+                    </a>
+                `;
+            }
+
+            attachmentHtml += `
+                <a href="${safeAttachmentUrl}" target="_blank" rel="noopener noreferrer" class="block rounded-lg px-3 py-2 ${attachmentCardClass}">
+                    <p class="text-sm font-medium break-all">${safeAttachmentName}</p>
+                    ${attachmentSize ? `<p class="text-xs mt-0.5 ${attachmentMetaClass}">${attachmentSize}</p>` : ''}
+                </a>
+            `;
+        }
+        
+        messageDiv.innerHTML = `
+            <div class="max-w-[75%]">
+                <div class="${bubbleClass} rounded-lg px-4 py-2.5 shadow-md">
+                    ${messageText ? `<p class="text-sm leading-relaxed break-words">${escapeHtml(messageText)}</p>` : ''}
+                    ${attachmentHtml ? `<div class="${messageText ? 'mt-2' : ''}">${attachmentHtml}</div>` : ''}
+                    <div class="text-xs ${message.is_self ? 'text-blue-100' : 'text-gray-500'} mt-1 text-right">
+                        ${messageTime}
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        chatMessages.appendChild(messageDiv);
+        scrollChatToBottom();
+    }
+
+    function scrollChatToBottom() {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    function formatTime(timeString) {
+        const date = new Date(timeString);
+        return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    }
+
+    function formatFileSize(bytes) {
+        if (!bytes || Number.isNaN(bytes)) return '';
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+    }
+
+    function clearAttachmentSelection() {
+        attachmentInput.value = '';
+        attachmentMeta.textContent = '';
+        attachmentMeta.classList.add('hidden');
+    }
+
+    function setAttachmentSelection(file) {
+        attachmentMeta.textContent = `Attached: ${file.name} (${formatFileSize(file.size)})`;
+        attachmentMeta.classList.remove('hidden');
+    }
+
+    function getCsrfToken() {
+        const cookieValue = `; ${document.cookie}`;
+        const parts = cookieValue.split('; csrftoken=');
+        if (parts.length === 2) {
+            return parts.pop().split(';').shift();
+        }
+        return '';
+    }
+
+    function sendTypingStatus(isTyping) {
+        if (!chatSocket || chatSocket.readyState !== WebSocket.OPEN) return;
+        chatSocket.send(JSON.stringify({
+            type: 'typing',
+            is_typing: isTyping,
+        }));
+    }
+
+    function markLocalTypingStopped() {
+        if (!isLocallyTyping) return;
+        isLocallyTyping = false;
+        sendTypingStatus(false);
+    }
+
+    function connectChatSocket() {
+        setPresenceLabel('Connecting...', 'text-yellow-600');
+        chatSocket = new WebSocket(chatSocketUrl);
+
+        chatSocket.onopen = function () {
+            setPresenceLabel('Connected', 'text-green-600');
+            if (reconnectTimer) {
+                clearTimeout(reconnectTimer);
+                reconnectTimer = null;
+            }
+        };
+
+        chatSocket.onmessage = function (event) {
+            const data = JSON.parse(event.data);
+
+            if (data.type === 'message') {
+                addMessageToChat(data);
+                hideTypingStatus();
+            } else if (data.type === 'typing') {
+                if (Number(data.sender_id) === otherUserId) {
+                    if (data.is_typing) {
+                        showTypingStatus(data.sender_name || 'Doctor');
+                    } else {
+                        hideTypingStatus();
+                    }
+                }
+            } else if (data.type === 'presence') {
+                updatePresence(data.online_user_ids || []);
+            }
+        };
+
+        chatSocket.onerror = function () {
+            setPresenceLabel('Offline', 'text-gray-500');
+        };
+
+        chatSocket.onclose = function () {
+            hideTypingStatus();
+            setPresenceLabel('Offline', 'text-gray-500');
+
+            if (!reconnectTimer) {
+                reconnectTimer = setTimeout(() => {
+                    reconnectTimer = null;
+                    connectChatSocket();
+                }, 2000);
+            }
+        };
+    }
+
+    function sendMessageViaHttp(message, attachmentFile = null) {
+        const csrftoken = getCsrfToken();
+        const formData = new FormData();
+        if (message) {
+            formData.append('message', message);
+        }
+        if (attachmentFile) {
+            formData.append('attachment', attachmentFile);
+        }
+
+        return fetch(`/medical/appointments/${appointmentId}/send-message/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrftoken
+            },
+            body: formData
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    addMessageToChat(data);
+                    return;
+                }
+                throw new Error(data.error || 'Failed to send message.');
+            });
+    }
+
+    function sendMessage(message, attachmentFile = null) {
+        if (attachmentFile) {
+            return sendMessageViaHttp(message, attachmentFile);
+        }
+
+        if (chatSocket && chatSocket.readyState === WebSocket.OPEN && message) {
+            chatSocket.send(JSON.stringify({
+                type: 'message',
+                message: message,
+            }));
+            return Promise.resolve();
+        }
+
+        return sendMessageViaHttp(message, null);
+    }
+
+    chatForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const message = messageInput.value.trim();
+        const selectedFile = attachmentInput.files[0];
+        if (!message && !selectedFile) return;
+        if (selectedFile && selectedFile.size > maxAttachmentBytes) {
+            alert('File size must be 10MB or less.');
+            clearAttachmentSelection();
+            return;
+        }
+
+        markLocalTypingStopped();
+
+        sendMessage(message, selectedFile)
+            .then(() => {
+                messageInput.value = '';
+                clearAttachmentSelection();
+            })
+            .catch(error => console.error('Error sending message:', error));
+    });
+
+    attachmentButton.addEventListener('click', function () {
+        attachmentInput.click();
+    });
+
+    attachmentInput.addEventListener('change', function () {
+        const selectedFile = attachmentInput.files[0];
+        if (!selectedFile) {
+            clearAttachmentSelection();
+            return;
+        }
+
+        if (selectedFile.size > maxAttachmentBytes) {
+            alert('File size must be 10MB or less.');
+            clearAttachmentSelection();
+            return;
+        }
+
+        setAttachmentSelection(selectedFile);
+    });
+
+    messageInput.addEventListener('input', function () {
+        const hasText = messageInput.value.trim().length > 0;
+
+        if (hasText && !isLocallyTyping) {
+            isLocallyTyping = true;
+            sendTypingStatus(true);
+        }
+
+        if (!hasText) {
+            markLocalTypingStopped();
+        }
+
+        clearTimeout(typingTimeout);
+        if (isLocallyTyping) {
+            typingTimeout = setTimeout(() => {
+                markLocalTypingStopped();
+            }, 1200);
+        }
+    });
+
+    messageInput.addEventListener('blur', function () {
+        markLocalTypingStopped();
+    });
+
+    window.addEventListener('beforeunload', function () {
+        markLocalTypingStopped();
+        if (chatSocket) {
+            chatSocket.close();
+        }
+    });
+
+    loadMessages();
+    startPolling();
+    connectChatSocket();
+</script>
+{% endblock %}

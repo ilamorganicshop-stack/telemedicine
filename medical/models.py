@@ -39,6 +39,7 @@ class DoctorProfile(models.Model):
     bio = models.TextField(blank=True, null=True)
     education = models.TextField(blank=True, null=True)
     is_available = models.BooleanField(default=True)
+    profile_picture = models.ImageField(upload_to='doctor_profiles/', blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -157,23 +158,6 @@ class Appointment(models.Model):
         null=True,
         help_text="When the video call ended"
     )
-    doctor_token = models.CharField(
-        max_length=255,
-        blank=True,
-        null=True,
-        help_text="Secure token for doctor to join video call"
-    )
-    patient_token = models.CharField(
-        max_length=255,
-        blank=True,
-        null=True,
-        help_text="Secure token for patient to join video call"
-    )
-    token_created_at = models.DateTimeField(
-        blank=True,
-        null=True,
-        help_text="When the tokens were generated"
-    )
     recording_enabled = models.BooleanField(
         default=False,
         help_text="Whether call recording is enabled (requires patient consent)"
@@ -212,13 +196,6 @@ class Appointment(models.Model):
         self.video_call_room_id = str(uuid.uuid4())
         return self.video_call_room_id
     
-    def generate_tokens(self):
-        """Generate secure tokens for doctor and patient"""
-        self.doctor_token = str(uuid.uuid4())
-        self.patient_token = str(uuid.uuid4())
-        self.token_created_at = timezone.now()
-        return self.doctor_token, self.patient_token
-    
     def start_video_call(self):
         """Mark video call as started"""
         from django.utils import timezone
@@ -235,19 +212,6 @@ class Appointment(models.Model):
             duration = (self.video_call_ended_at - self.video_call_started_at).total_seconds()
             self.call_duration = int(duration)
         self.save()
-    
-    def is_token_valid(self, token_type='patient'):
-        """Check if token is still valid (not expired)"""
-        from django.utils import timezone
-        from django.conf import settings
-        
-        if not self.token_created_at:
-            return False
-        
-        expiry_hours = getattr(settings, 'VIDEO_CALL_TOKEN_EXPIRY', 24)
-        expiry_time = self.token_created_at + timezone.timedelta(hours=expiry_hours)
-        
-        return timezone.now() <= expiry_time
     
     class Meta:
         verbose_name = "Appointment"
@@ -299,6 +263,11 @@ class ChatMessage(models.Model):
         related_name='sent_messages'
     )
     message = models.TextField()
+    attachment = models.FileField(
+        upload_to='chat_attachments/%Y/%m/%d/',
+        blank=True,
+        null=True
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
     

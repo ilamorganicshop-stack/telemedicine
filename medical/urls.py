@@ -25,6 +25,8 @@ urlpatterns = [
     
     # Chat
     path('appointments/<int:appointment_id>/chat/', views.chat_view, name='chat'),
+    path('appointments/<int:appointment_id>/doctor-chat/', views.doctor_chatbox, name='doctor_chatbox'),
+    path('appointments/<int:appointment_id>/patient-chat/', views.patient_chatbox, name='patient_chatbox'),
     path('appointments/<int:appointment_id>/send-message/', views.send_message, name='send_message'),
     path('appointments/<int:appointment_id>/get-messages/', views.get_chat_messages, name='get_chat_messages'),
     
@@ -34,9 +36,14 @@ urlpatterns = [
     path('appointments/<int:appointment_id>/video-call/join/', views.join_video_call, name='join_video_call'),
     path('appointments/<int:appointment_id>/video-call/end/', views.end_video_call, name='end_video_call'),
     path('appointments/<int:appointment_id>/video-call/status/', views.get_video_call_status, name='video_call_status'),
-    path('appointments/<int:appointment_id>/video-call/signal/', views.video_call_signal, name='video_call_signal'),
     path('video-call/test-devices/', views.test_devices, name='test_devices'),
     
     # Waiting Lobby
     path('appointments/<int:appointment_id>/waiting-lobby/', views.waiting_lobby, name='waiting_lobby'),
+    
+    # Doctor Patients
+    path('doctor/patients/', views.doctor_patients, name='doctor_patients'),
+    
+    # Update appointment time (for testing)
+    path('appointments/<int:appointment_id>/update-time/', views.update_appointment_time, name='update_appointment_time'),
 ]

@@ -14,9 +14,13 @@
         <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow">
             <div class="p-6">
                 <div class="flex items-center mb-4">
+                    {% if doctor.profile_picture %}
+                    <img src="{{ doctor.profile_picture.url }}" alt="Dr. {{ doctor.user.last_name }}" class="h-12 w-12 rounded-full object-cover">
+                    {% else %}
                     <div class="h-12 w-12 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
                         {{ doctor.user.first_name.0 }}{{ doctor.user.last_name.0 }}
                     </div>
+                    {% endif %}
                     <div class="ml-4">
                         <h3 class="text-lg font-semibold text-gray-900">
                             Dr. {{ doctor.user.first_name }} {{ doctor.user.last_name }}

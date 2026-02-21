@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from datetime import datetime
+from datetime import datetime, timedelta
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
@@ -130,13 +130,25 @@ def dashboard_view(request):
         
         # Only continue if doctor has both user role and profile
         if doctor_profile and user.hospital:
-            today = timezone.now().date()
+            from datetime import time
+            now = timezone.now()
+            next_24_hours = now + timezone.timedelta(hours=24)
+            
+            # All appointments in next 24 hours
             today_appointments = Appointment.objects.filter(
                 doctor=user,
-                appointment_date__date=today,
-                status__in=['scheduled', 'confirmed']
+                appointment_date__gte=now,
+                appointment_date__lte=next_24_hours,
+                status__in=['scheduled', 'confirmed', 'requested', 'pending_approval']
             ).order_by('appointment_date')
-            waiting_room_count = today_appointments.filter(status='confirmed').count()
+            
+            # Waiting room count (scheduled appointments in next 24 hours)
+            waiting_room_count = Appointment.objects.filter(
+                doctor=user,
+                appointment_date__gte=now,
+                appointment_date__lte=next_24_hours,
+                status='scheduled'
+            ).count()
             
             # Get pending appointment requests
             pending_appointments = Appointment.objects.filter(
@@ -144,9 +156,11 @@ def dashboard_view(request):
                 status__in=['requested', 'pending_approval']
             ).order_by('appointment_date')
             
+            # Total patients (completed consultations with ended video calls)
             total_patients = Appointment.objects.filter(
                 doctor=user,
-                status='completed'
+                status='completed',
+                video_call_status='ended'
             ).values('patient').distinct().count()
             
             context.update({
@@ -958,7 +972,6 @@ def edit_hospital(request, pk):
 
 
 @login_required
-@user_passes_test(is_super_admin)
 def delete_hospital(request, pk):
     hospital = get_object_or_404(Hospital, pk=pk)
     
@@ -973,3 +986,47 @@ def delete_hospital(request, pk):
         'object_type': 'Hospital',
         'cancel_url': 'accounts:manage_hospitals'
     })
+
+
+@login_required
+def update_profile(request):
+    """Update patient/doctor profile"""
+    if request.method == 'POST':
+        user = request.user
+        
+        # Update user fields
+        user.first_name = request.POST.get('first_name', '')
+        user.last_name = request.POST.get('last_name', '')
+        user.email = request.POST.get('email', '')
+        user.phone = request.POST.get('phone', '')
+        
+        date_of_birth = request.POST.get('date_of_birth', '')
+        if date_of_birth:
+            user.date_of_birth = date_of_birth
+        
+        user.save()
+        
+        # Update patient profile if exists
+        if hasattr(user, 'patient_profile'):
+            profile = user.patient_profile
+            profile.blood_type = request.POST.get('blood_type', '')
+            profile.emergency_contact_name = request.POST.get('emergency_contact_name', '')
+            profile.emergency_contact_phone = request.POST.get('emergency_contact_phone', '')
+            profile.save()
+        
+        # Update doctor profile if exists
+        if hasattr(user, 'doctor_profile'):
+            profile = user.doctor_profile
+            if 'profile_picture' in request.FILES:
+                picture = request.FILES['profile_picture']
+                # Check file size (1MB = 1048576 bytes)
+                if picture.size > 1048576:
+                    messages.error(request, 'Profile picture must be less than 1MB.')
+                    return redirect('accounts:dashboard')
+                profile.profile_picture = picture
+            profile.save()
+        
+        messages.success(request, 'Profile updated successfully!')
+        return redirect('accounts:dashboard')
+    
+    return redirect('accounts:dashboard')

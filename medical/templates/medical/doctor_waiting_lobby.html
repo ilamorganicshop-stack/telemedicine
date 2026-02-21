@@ -1,8 +1,34 @@
-{% extends 'accounts/patient_base.html' %}
+{% extends 'accounts/doctor_base.html' %}
 
 {% block title %}Waiting Lobby - Telemedicine System{% endblock %}
 
 {% block content %}
+<style>
+    @keyframes fade-in {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    .animate-fade-in {
+        animation: fade-in 0.3s ease-out;
+    }
+    .chat-bg {
+        background-color: #e5ddd5;
+        background-image: 
+            linear-gradient(45deg, #f0f0f0 25%, transparent 25%),
+            linear-gradient(-45deg, #f0f0f0 25%, transparent 25%),
+            linear-gradient(45deg, transparent 75%, #f0f0f0 75%),
+            linear-gradient(-45deg, transparent 75%, #f0f0f0 75%);
+        background-size: 20px 20px;
+        background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+    }
+</style>
+
 <div class="max-w-6xl mx-auto py-4 sm:py-8 px-2 sm:px-4">
     <div class="bg-white shadow-lg rounded-lg overflow-hidden">
         <div class="px-4 sm:px-6 py-6 sm:py-8 bg-white">
@@ -12,19 +38,21 @@
                     <p class="text-sm sm:text-base text-gray-900">Your appointment is scheduled. Please wait for the call to begin.</p>
                 </div>
                 <div class="flex flex-col sm:flex-row gap-3">
-                    <a href="{% url 'medical:test_devices' %}" 
+                    <a
+                        href="{% url 'medical:test_devices' %}"
                         class="px-4 sm:px-6 py-2.5 sm:py-3 bg-white text-indigo-600 rounded-lg font-semibold hover:bg-indigo-50 transition-colors flex items-center shadow-lg text-sm sm:text-base whitespace-nowrap">
                         <svg class="w-4 h-4 sm:w-5 sm:h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                         </svg>
                         Test Devices
                     </a>
-                    <a href="{% url 'medical:patient_chatbox' appointment.id %}" 
+                    <a
+                        href="{% url 'medical:doctor_chatbox' appointment.id %}"
                         class="px-4 sm:px-6 py-2.5 sm:py-3 bg-white text-blue-600 rounded-lg font-semibold hover:bg-blue-50 transition-colors flex items-center shadow-lg text-sm sm:text-base whitespace-nowrap">
                         <svg class="w-4 h-4 sm:w-5 sm:h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                         </svg>
-                        Chat with Doctor
+                        Chat with Patient
                     </a>
                 </div>
             </div>
@@ -34,9 +62,9 @@
             <h2 class="text-lg sm:text-xl font-semibold text-gray-900 mb-4">Appointment Details</h2>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 <div>
-                    <p class="text-xs sm:text-sm text-gray-600 font-medium">Doctor</p>
-                    <p class="text-base sm:text-lg font-medium text-gray-900 mt-1">Dr. {{ appointment.doctor.first_name }} {{ appointment.doctor.last_name }}</p>
-                    <p class="text-xs sm:text-sm text-gray-900 mt-0.5">{{ appointment.doctor.doctor_profile.specialization }}</p>
+                    <p class="text-xs sm:text-sm text-gray-600 font-medium">Patient</p>
+                    <p class="text-base sm:text-lg font-medium text-gray-900 mt-1">{{ appointment.patient.first_name }} {{ appointment.patient.last_name }}</p>
+                    <p class="text-xs sm:text-sm text-gray-900 mt-0.5">{{ appointment.symptoms|default:"No symptoms provided" }}</p>
                 </div>
                 <div>
                     <p class="text-xs sm:text-sm text-gray-600 font-medium">Scheduled Date & Time</p>
@@ -78,7 +106,7 @@
                     </div>
                 {% else %}
                     <div class="bg-blue-50 border-2 border-blue-300 rounded-lg p-3 sm:p-4 mb-4">
-                        <p class="text-blue-800 font-medium text-sm sm:text-base">Please wait. You'll be able to join 5 minutes before your appointment.</p>
+                        <p class="text-blue-800 font-medium text-sm sm:text-base">Please wait. You'll be able to start 5 minutes before the appointment.</p>
                     </div>
                 {% endif %}
             </div>
@@ -92,7 +120,7 @@
         </div>
 
         <div class="bg-gray-50 px-4 sm:px-6 py-4 sm:py-6">
-            <h3 class="text-base sm:text-lg font-semibold text-gray-900 mb-3">Before your appointment:</h3>
+            <h3 class="text-base sm:text-lg font-semibold text-gray-900 mb-3">Before the appointment:</h3>
             <ul class="space-y-2 text-gray-900 text-sm sm:text-base">
                 <li class="flex items-start">
                     <svg class="w-4 h-4 sm:w-5 sm:h-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -110,13 +138,13 @@
                     <svg class="w-4 h-4 sm:w-5 sm:h-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
                     </svg>
-                    <span>Find a quiet, well-lit place for your consultation</span>
+                    <span>Find a quiet, well-lit place for the consultation</span>
                 </li>
                 <li class="flex items-start">
                     <svg class="w-4 h-4 sm:w-5 sm:h-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
                     </svg>
-                    <span>Have your medical history and current medications ready</span>
+                    <span>Review patient's medical history and symptoms</span>
                 </li>
             </ul>
         </div>
@@ -126,13 +154,14 @@
 <script>
     let timeRemaining = {{ time_until_appointment }};
     const appointmentId = {{ appointment.id }};
+    const currentUserId = {{ user.id }};
     
     const countdownInterval = setInterval(updateCountdown, 1000);
     
     function updateCountdown() {
         if (timeRemaining <= 0) {
             clearInterval(countdownInterval);
-            enableStatus();
+            enableStartButton();
             return;
         }
         
@@ -147,14 +176,15 @@
         document.getElementById('seconds').textContent = String(seconds).padStart(2, '0');
         
         if (timeRemaining <= 300) {
-            enableStatus();
+            enableStartButton();
         }
         
         timeRemaining--;
     }
     
-    function enableStatus() {
+    function enableStartButton() {
         const statusMessage = document.getElementById('status-message');
+        
         statusMessage.innerHTML = `
             <div class="bg-green-50 border-2 border-green-300 rounded-lg p-3 sm:p-4 mb-4 animate-pulse">
                 <p class="text-green-800 font-semibold text-base sm:text-lg">✓ Appointment time reached!</p>

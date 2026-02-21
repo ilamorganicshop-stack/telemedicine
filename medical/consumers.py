@@ -1,8 +1,13 @@
+import asyncio
 import json
 import uuid
+from collections import defaultdict
+
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.utils import timezone
+
+from .models import Appointment, ChatMessage
 
 
 class VideoCallConsumer(AsyncWebsocketConsumer):
@@ -193,3 +198,195 @@ class VideoCallConsumer(AsyncWebsocketConsumer):
                 'type': 'screen-share',
                 'is_sharing': event.get('is_sharing'),
             }))
+
+
+class ChatConsumer(AsyncWebsocketConsumer):
+    room_connections = defaultdict(lambda: defaultdict(set))
+    presence_lock = None
+
+    @classmethod
+    def get_presence_lock(cls):
+        if cls.presence_lock is None:
+            cls.presence_lock = asyncio.Lock()
+        return cls.presence_lock
+
+    async def connect(self):
+        user = self.scope.get('user')
+        if not user or user.is_anonymous:
+            await self.close(code=4001)
+            return
+
+        self.user = user
+        self.appointment_id = int(self.scope['url_route']['kwargs']['appointment_id'])
+        self.room_group_name = f'chat_{self.appointment_id}'
+
+        appointment = await self.get_appointment(self.appointment_id)
+        if not appointment:
+            await self.close(code=4004)
+            return
+
+        if self.user.id not in {appointment.patient_id, appointment.doctor_id}:
+            await self.close(code=4003)
+            return
+
+        await self.channel_layer.group_add(self.room_group_name, self.channel_name)
+        await self.accept()
+
+        online_user_ids = await self.add_online_user()
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                'type': 'presence_update',
+                'online_user_ids': online_user_ids,
+            }
+        )
+
+    async def disconnect(self, close_code):
+        if not hasattr(self, 'room_group_name'):
+            return
+
+        online_user_ids = await self.remove_online_user()
+
+        await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                'type': 'presence_update',
+                'online_user_ids': online_user_ids,
+            }
+        )
+
+    async def receive(self, text_data):
+        try:
+            data = json.loads(text_data)
+        except json.JSONDecodeError:
+            await self.send(text_data=json.dumps({
+                'type': 'error',
+                'message': 'Invalid payload.',
+            }))
+            return
+
+        message_type = data.get('type')
+
+        if message_type == 'message':
+            raw_message = data.get('message', '')
+            message_text = raw_message.strip()
+            if not message_text:
+                return
+
+            message_data = await self.save_message(
+                appointment_id=self.appointment_id,
+                sender_id=self.user.id,
+                message_text=message_text,
+            )
+
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'chat_message',
+                    **message_data,
+                    'sender_name': self.get_user_display_name(),
+                }
+            )
+
+        elif message_type == 'typing':
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'typing_update',
+                    'sender_id': self.user.id,
+                    'sender_name': self.get_user_display_name(),
+                    'is_typing': bool(data.get('is_typing')),
+                    'sender_channel': self.channel_name,
+                }
+            )
+
+    async def chat_message(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'message',
+            'id': event.get('id'),
+            'message': event.get('message'),
+            'sender_id': event.get('sender_id'),
+            'sender_name': event.get('sender_name'),
+            'created_at': event.get('created_at'),
+            'created_at_display': event.get('created_at_display'),
+            'has_attachment': event.get('has_attachment', False),
+            'attachment_url': event.get('attachment_url'),
+            'attachment_name': event.get('attachment_name'),
+            'attachment_size': event.get('attachment_size'),
+            'is_image': event.get('is_image', False),
+            'is_self': event.get('sender_id') == self.user.id,
+        }))
+
+    async def typing_update(self, event):
+        if event.get('sender_channel') == self.channel_name:
+            return
+
+        await self.send(text_data=json.dumps({
+            'type': 'typing',
+            'sender_id': event.get('sender_id'),
+            'sender_name': event.get('sender_name'),
+            'is_typing': event.get('is_typing', False),
+        }))
+
+    async def presence_update(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'presence',
+            'online_user_ids': event.get('online_user_ids', []),
+        }))
+
+    async def add_online_user(self):
+        lock = self.get_presence_lock()
+        async with lock:
+            room_state = self.room_connections[self.room_group_name]
+            room_state[self.user.id].add(self.channel_name)
+            return sorted(room_state.keys())
+
+    async def remove_online_user(self):
+        lock = self.get_presence_lock()
+        async with lock:
+            room_state = self.room_connections.get(self.room_group_name)
+            if not room_state:
+                return []
+
+            user_connections = room_state.get(self.user.id)
+            if user_connections:
+                user_connections.discard(self.channel_name)
+                if not user_connections:
+                    room_state.pop(self.user.id, None)
+
+            if not room_state:
+                self.room_connections.pop(self.room_group_name, None)
+                return []
+
+            return sorted(room_state.keys())
+
+    def get_user_display_name(self):
+        full_name = f'{self.user.first_name} {self.user.last_name}'.strip()
+        return full_name or self.user.username or self.user.email
+
+    @database_sync_to_async
+    def get_appointment(self, appointment_id):
+        return Appointment.objects.filter(id=appointment_id).first()
+
+    @database_sync_to_async
+    def save_message(self, appointment_id, sender_id, message_text):
+        message = ChatMessage.objects.create(
+            appointment_id=appointment_id,
+            sender_id=sender_id,
+            message=message_text,
+        )
+        local_timestamp = timezone.localtime(message.created_at)
+
+        return {
+            'id': message.id,
+            'message': message.message,
+            'sender_id': sender_id,
+            'created_at': local_timestamp.isoformat(),
+            'created_at_display': local_timestamp.strftime('%I:%M %p').lstrip('0'),
+            'has_attachment': False,
+            'attachment_url': None,
+            'attachment_name': None,
+            'attachment_size': 0,
+            'is_image': False,
+        }

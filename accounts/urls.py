@@ -51,4 +51,7 @@ urlpatterns = [
     path('payment/', views.khalti_payment, name='khalti_payment'),
     path('payment/verify/', views.khalti_verify, name='khalti_verify'),
     path('payment/success/', views.payment_success, name='payment_success'),
+    
+    # Profile Update
+    path('update-profile/', views.update_profile, name='update_profile'),
 ]

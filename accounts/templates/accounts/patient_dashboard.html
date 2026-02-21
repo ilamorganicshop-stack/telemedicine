@@ -88,7 +88,10 @@
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <div class="text-sm text-gray-900">{{ appointment.appointment_date|date:"M d, Y" }}</div>
-                            <div class="text-sm text-gray-500">{{ appointment.appointment_date|time:"h:i A" }}</div>
+                            <input type="datetime-local" 
+                                   value="{{ appointment.appointment_date|date:'Y-m-d\TH:i' }}" 
+                                   onchange="updateAppointmentTime({{ appointment.id }}, this.value)"
+                                   class="text-xs text-gray-700 border border-gray-300 rounded px-2 py-1 mt-1">
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
@@ -166,27 +169,35 @@
 </div>
 {% endif %}
 
-<div class="mt-8 bg-white shadow rounded-lg">
-    <div class="px-4 py-5 sm:p-6">
-        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Profile Information</h3>
-        <div class="space-y-3">
-            <div>
-                <span class="text-sm font-medium text-gray-500">Name:</span>
-                <span class="ml-2 text-sm text-gray-900">{{ user.first_name }} {{ user.last_name }}</span>
-            </div>
-            <div>
-                <span class="text-sm font-medium text-gray-500">Email:</span>
-                <span class="ml-2 text-sm text-gray-900">{{ user.email }}</span>
-            </div>
-            <div>
-                <span class="text-sm font-medium text-gray-500">Phone:</span>
-                <span class="ml-2 text-sm text-gray-900">{{ user.phone|default:"Not provided" }}</span>
-            </div>
-            <div>
-                <span class="text-sm font-medium text-gray-500">Date of Birth:</span>
-                <span class="ml-2 text-sm text-gray-900">{{ user.date_of_birth|default:"Not provided" }}</span>
-            </div>
-        </div>
-    </div>
-</div>
+<script>
+function updateAppointmentTime(appointmentId, newTime) {
+    if (!confirm('Update appointment time to ' + new Date(newTime).toLocaleString() + '?')) {
+        location.reload();
+        return;
+    }
+    
+    fetch(`/medical/appointments/${appointmentId}/update-time/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({ appointment_date: newTime })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Appointment time updated successfully!');
+            location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Failed to update'));
+            location.reload();
+        }
+    })
+    .catch(error => {
+        alert('Error updating appointment time');
+        location.reload();
+    });
+}
+</script>
 {% endblock %}
