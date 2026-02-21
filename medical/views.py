@@ -295,6 +295,44 @@ def send_message(request, appointment_id):
     })
 
 
+@login_required
+def get_chat_messages(request, appointment_id):
+    """Get chat messages for an appointment (AJAX endpoint)"""
+    appointment = get_object_or_404(Appointment, id=appointment_id)
+    user = request.user
+    
+    # Check permissions
+    if not (user.is_admin_user or user == appointment.patient or user == appointment.doctor):
+        return JsonResponse({'error': 'Permission denied'}, status=403)
+    
+    # Get messages since a specific time (for polling)
+    since = request.GET.get('since')
+    messages_query = ChatMessage.objects.filter(appointment=appointment).select_related('sender')
+    
+    if since:
+        try:
+            since_time = timezone.datetime.fromisoformat(since)
+            messages_query = messages_query.filter(created_at__gt=since_time)
+        except ValueError:
+            pass
+    
+    messages_query = messages_query.order_by('created_at')
+    
+    messages_data = [{
+        'id': msg.id,
+        'message': msg.message,
+        'sender': f"{msg.sender.first_name} {msg.sender.last_name}",
+        'sender_id': msg.sender.id,
+        'created_at': msg.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+        'is_self': msg.sender == user
+    } for msg in messages_query]
+    
+    return JsonResponse({
+        'success': True,
+        'messages': messages_data
+    })
+
+
 # ==================== VIDEO CALL VIEWS ====================
 
 @login_required
@@ -461,3 +499,34 @@ def get_video_call_status(request, appointment_id):
         'started_at': appointment.video_call_started_at.isoformat() if appointment.video_call_started_at else None,
         'duration': appointment.call_duration,
     })
+
+
+@login_required
+def waiting_lobby(request, appointment_id):
+    """
+    Waiting lobby view for patients before joining a video call.
+    Shows a countdown timer until the appointment time.
+    """
+    appointment = get_object_or_404(Appointment, id=appointment_id)
+    
+    # Check if user is the patient for this appointment
+    if request.user != appointment.patient:
+        messages.error(request, 'You do not have permission to access this waiting lobby.')
+        return redirect('accounts:dashboard')
+    
+    # Check if appointment is scheduled or confirmed
+    if appointment.status not in ['scheduled', 'confirmed']:
+        messages.warning(request, 'This appointment is not scheduled.')
+        return redirect('accounts:dashboard')
+    
+    # Calculate time until appointment
+    now = timezone.now()
+    time_until_appointment = (appointment.appointment_date - now).total_seconds()
+    
+    context = {
+        'appointment': appointment,
+        'time_until_appointment': max(0, time_until_appointment),  # Don't show negative time
+        'can_join': time_until_appointment <= 300,  # Can join 5 minutes before
+    }
+    
+    return render(request, 'medical/waiting_lobby.html', context)

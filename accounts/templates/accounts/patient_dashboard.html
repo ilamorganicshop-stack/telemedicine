@@ -1,8 +1,9 @@
-{% extends 'accounts/dashboard_base.html' %}
+{% extends 'accounts/patient_base.html' %}
 
 {% block title %}Patient Dashboard - Telemedicine System{% endblock %}
 
-{% block dashboard_content %}
+{% block content %}
+<div class="p-4 sm:p-6 lg:p-8">
 <div class="mb-8">
     <h2 class="text-2xl font-bold text-gray-900">Patient Dashboard</h2>
     <p class="mt-1 text-sm text-gray-600">Manage your appointments and consultations</p>
@@ -99,7 +100,17 @@
                             </span>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <a href="#" class="text-indigo-600 hover:text-indigo-900">View Details</a>
+                            {% if appointment.status == 'scheduled' or appointment.status == 'confirmed' %}
+                            <a href="{% url 'medical:waiting_lobby' appointment.id %}" 
+                               class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors">
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                Waiting Lobby
+                            </a>
+                            {% else %}
+                            <span class="text-gray-400">Not Available</span>
+                            {% endif %}
                         </td>
                     </tr>
                     {% endfor %}

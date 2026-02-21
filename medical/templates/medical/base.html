@@ -11,11 +11,6 @@
             </div>
             <div class="flex items-center space-x-4">
                 {% if user.is_authenticated %}
-                    {% if user.is_patient %}
-                        <a href="{% url 'medical:create_appointment' %}" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
-                            Book Appointment
-                        </a>
-                    {% endif %}
                     <a href="{% url 'medical:hospital_list' %}" class="text-gray-700 hover:text-blue-600">Hospitals</a>
                     <a href="{% url 'medical:doctor_list' %}" class="text-gray-700 hover:text-blue-600">Doctors</a>
                     {% if user.is_doctor or user.is_admin_user %}

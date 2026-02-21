@@ -1,0 +1,412 @@
+{% extends 'accounts/patient_base.html' %}
+
+{% block title %}Waiting Lobby - Telemedicine System{% endblock %}
+
+{% block content %}
+<style>
+    @keyframes fade-in {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    .animate-fade-in {
+        animation: fade-in 0.3s ease-out;
+    }
+    /* WhatsApp-like background pattern */
+    .chat-bg {
+        background-color: #e5ddd5;
+        background-image: 
+            linear-gradient(45deg, #f0f0f0 25%, transparent 25%),
+            linear-gradient(-45deg, #f0f0f0 25%, transparent 25%),
+            linear-gradient(45deg, transparent 75%, #f0f0f0 75%),
+            linear-gradient(-45deg, transparent 75%, #f0f0f0 75%);
+        background-size: 20px 20px;
+        background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+    }
+</style>
+
+<div class="max-w-6xl mx-auto py-4 sm:py-8 px-2 sm:px-4">
+    <div class="bg-white shadow-lg rounded-lg overflow-hidden">
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 sm:px-6 py-6 sm:py-8 text-white">
+            <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div class="text-center sm:text-left flex-1">
+                    <h1 class="text-2xl sm:text-3xl font-bold mb-2">Waiting Lobby</h1>
+                    <p class="text-blue-100 text-sm sm:text-base">Your appointment is scheduled. Please wait for the call to begin.</p>
+                </div>
+                <button 
+                    onclick="toggleChat()"
+                    class="px-4 sm:px-6 py-2.5 sm:py-3 bg-white text-blue-600 rounded-lg font-semibold hover:bg-blue-50 transition-colors flex items-center shadow-lg text-sm sm:text-base whitespace-nowrap">
+                    <svg class="w-4 h-4 sm:w-5 sm:h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                    Chat with Doctor
+                </button>
+            </div>
+        </div>
+
+        <!-- Appointment Details -->
+        <div class="px-4 sm:px-6 py-6 sm:py-8 border-b border-gray-200">
+            <h2 class="text-lg sm:text-xl font-semibold text-gray-900 mb-4">Appointment Details</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                <div>
+                    <p class="text-xs sm:text-sm text-gray-600 font-medium">Doctor</p>
+                    <p class="text-base sm:text-lg font-medium text-gray-900 mt-1">Dr. {{ appointment.doctor.first_name }} {{ appointment.doctor.last_name }}</p>
+                    <p class="text-xs sm:text-sm text-gray-900 mt-0.5">{{ appointment.doctor.doctor_profile.specialization }}</p>
+                </div>
+                <div>
+                    <p class="text-xs sm:text-sm text-gray-600 font-medium">Scheduled Date & Time</p>
+                    <p class="text-base sm:text-lg font-medium text-gray-900 mt-1">{{ appointment.appointment_date|date:"F d, Y" }}</p>
+                    <p class="text-xs sm:text-sm text-gray-900 mt-0.5">{{ appointment.appointment_date|time:"h:i A" }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Countdown Timer -->
+        <div class="px-4 sm:px-6 py-8 sm:py-12 text-center">
+            <h3 class="text-xl sm:text-2xl font-semibold text-gray-900 mb-6">Time Until Appointment</h3>
+            
+            <div id="countdown" class="flex justify-center gap-2 sm:gap-4 mb-8 flex-wrap">
+                <div class="bg-blue-50 rounded-lg p-3 sm:p-6 min-w-[70px] sm:min-w-[100px] border-2 border-blue-200">
+                    <div id="days" class="text-2xl sm:text-4xl font-bold text-blue-600">00</div>
+                    <div class="text-xs sm:text-sm text-gray-900 mt-1 sm:mt-2 font-medium">Days</div>
+                </div>
+                <div class="bg-blue-50 rounded-lg p-3 sm:p-6 min-w-[70px] sm:min-w-[100px] border-2 border-blue-200">
+                    <div id="hours" class="text-2xl sm:text-4xl font-bold text-blue-600">00</div>
+                    <div class="text-xs sm:text-sm text-gray-900 mt-1 sm:mt-2 font-medium">Hours</div>
+                </div>
+                <div class="bg-blue-50 rounded-lg p-3 sm:p-6 min-w-[70px] sm:min-w-[100px] border-2 border-blue-200">
+                    <div id="minutes" class="text-2xl sm:text-4xl font-bold text-blue-600">00</div>
+                    <div class="text-xs sm:text-sm text-gray-900 mt-1 sm:mt-2 font-medium">Minutes</div>
+                </div>
+                <div class="bg-blue-50 rounded-lg p-3 sm:p-6 min-w-[70px] sm:min-w-[100px] border-2 border-blue-200">
+                    <div id="seconds" class="text-2xl sm:text-4xl font-bold text-blue-600">00</div>
+                    <div class="text-xs sm:text-sm text-gray-900 mt-1 sm:mt-2 font-medium">Seconds</div>
+                </div>
+            </div>
+
+            <!-- Status Messages -->
+            <div id="status-message" class="mb-6 px-2 sm:px-0">
+                {% if can_join %}
+                    <div class="bg-green-50 border-2 border-green-300 rounded-lg p-3 sm:p-4 mb-4">
+                        <p class="text-green-800 font-semibold text-sm sm:text-base">✓ You can now join the call!</p>
+                    </div>
+                {% else %}
+                    <div class="bg-blue-50 border-2 border-blue-300 rounded-lg p-3 sm:p-4 mb-4">
+                        <p class="text-blue-800 font-medium text-sm sm:text-base">Please wait. You'll be able to join 5 minutes before your appointment.</p>
+                    </div>
+                {% endif %}
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex flex-col gap-4 items-center">
+                <button 
+                    id="join-call-btn" 
+                    onclick="joinCall()"
+                    class="w-full sm:w-auto px-6 sm:px-8 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed shadow-lg text-sm sm:text-base"
+                    {% if not can_join %}disabled{% endif %}>
+                    <svg class="inline-block w-4 h-4 sm:w-5 sm:h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    Join Video Call
+                </button>
+
+                <a href="{% url 'accounts:dashboard' %}" 
+                   class="text-blue-600 hover:text-blue-800 text-xs sm:text-sm font-medium">
+                    ← Back to Dashboard
+                </a>
+            </div>
+        </div>
+
+        <!-- Tips Section -->
+        <div class="bg-gray-50 px-4 sm:px-6 py-4 sm:py-6">
+            <h3 class="text-base sm:text-lg font-semibold text-gray-900 mb-3">Before your appointment:</h3>
+            <ul class="space-y-2 text-gray-900 text-sm sm:text-base">
+                <li class="flex items-start">
+                    <svg class="w-4 h-4 sm:w-5 sm:h-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                    </svg>
+                    <span>Ensure you have a stable internet connection</span>
+                </li>
+                <li class="flex items-start">
+                    <svg class="w-4 h-4 sm:w-5 sm:h-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                    </svg>
+                    <span>Test your camera and microphone</span>
+                </li>
+                <li class="flex items-start">
+                    <svg class="w-4 h-4 sm:w-5 sm:h-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                    </svg>
+                    <span>Find a quiet, well-lit place for your consultation</span>
+                </li>
+                <li class="flex items-start">
+                    <svg class="w-4 h-4 sm:w-5 sm:h-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                    </svg>
+                    <span>Have your medical history and current medications ready</span>
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- Chat Modal (Full Page - WhatsApp Style) -->
+<div id="chat-modal" class="fixed inset-0 z-50 hidden bg-white">
+    <div class="h-screen flex flex-col">
+        <!-- Chat Header -->
+        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-4 text-white shadow-lg flex justify-between items-center">
+            <div class="flex items-center gap-3 flex-1 min-w-0">
+                <button onclick="toggleChat()" class="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-colors flex-shrink-0">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </button>
+                <div class="min-w-0 flex-1">
+                    <h2 class="text-lg sm:text-xl font-bold truncate">
+                        Dr. {{ appointment.doctor.first_name }} {{ appointment.doctor.last_name }}
+                    </h2>
+                    <p class="text-xs sm:text-sm text-blue-100 truncate">{{ appointment.doctor.doctor_profile.specialization }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Messages Container (WhatsApp-like beige background) -->
+        <div class="flex-1 overflow-hidden chat-bg">
+            <div class="h-full flex flex-col">
+                <!-- Messages Area -->
+                <div id="chat-messages" class="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2 sm:space-y-3 max-h-[calc(100vh-200px)]">
+                    <!-- Messages will be loaded here -->
+                    <div class="text-center text-gray-600 py-8">
+                        <div class="inline-block bg-white rounded-lg shadow-sm px-4 py-3">
+                            <svg class="w-12 h-12 mx-auto text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                            </svg>
+                            <p class="text-gray-900 font-medium text-sm">No messages yet</p>
+                            <p class="text-xs text-gray-600 mt-1">Start a conversation with your doctor</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chat Input (Fixed at bottom) -->
+                <div class="bg-gray-100 px-3 sm:px-4 py-3 shadow-lg border-t border-gray-200">
+                    <form id="chat-form" class="flex gap-2 sm:gap-3 items-end">
+                        <div class="flex-1">
+                            <input 
+                                type="text" 
+                                id="message-input" 
+                                placeholder="Type a message" 
+                                class="w-full rounded-full border border-gray-300 px-4 sm:px-5 py-2.5 sm:py-3 text-sm sm:text-base text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                                required>
+                        </div>
+                        <button 
+                            type="submit" 
+                            class="bg-blue-600 text-white rounded-full p-2.5 sm:p-3 hover:bg-blue-700 transition-colors shadow-md hover:shadow-lg flex-shrink-0">
+                            <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                            </svg>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Time until appointment in seconds (from Django)
+    let timeRemaining = {{ time_until_appointment }};
+    const appointmentId = {{ appointment.id }};
+    const currentUserId = {{ user.id }};
+    
+    // Update countdown every second
+    const countdownInterval = setInterval(updateCountdown, 1000);
+    
+    // Poll for new messages every 3 seconds (only when chat is open)
+    let lastMessageTime = null;
+    let chatInterval = null;
+    let isChatOpen = false;
+    
+    function updateCountdown() {
+        if (timeRemaining <= 0) {
+            clearInterval(countdownInterval);
+            enableJoinButton();
+            return;
+        }
+        
+        const days = Math.floor(timeRemaining / (24 * 60 * 60));
+        const hours = Math.floor((timeRemaining % (24 * 60 * 60)) / (60 * 60));
+        const minutes = Math.floor((timeRemaining % (60 * 60)) / 60);
+        const seconds = Math.floor(timeRemaining % 60);
+        
+        document.getElementById('days').textContent = String(days).padStart(2, '0');
+        document.getElementById('hours').textContent = String(hours).padStart(2, '0');
+        document.getElementById('minutes').textContent = String(minutes).padStart(2, '0');
+        document.getElementById('seconds').textContent = String(seconds).padStart(2, '0');
+        
+        // Enable join button 5 minutes (300 seconds) before appointment
+        if (timeRemaining <= 300 && document.getElementById('join-call-btn').disabled) {
+            enableJoinButton();
+        }
+        
+        timeRemaining--;
+    }
+    
+    function enableJoinButton() {
+        const joinBtn = document.getElementById('join-call-btn');
+        const statusMessage = document.getElementById('status-message');
+        
+        joinBtn.disabled = false;
+        joinBtn.classList.remove('disabled:bg-gray-400', 'disabled:cursor-not-allowed');
+        
+        statusMessage.innerHTML = `
+            <div class="bg-green-50 border-2 border-green-300 rounded-lg p-3 sm:p-4 mb-4 animate-pulse">
+                <p class="text-green-800 font-semibold text-base sm:text-lg">✓ You can now join the call!</p>
+            </div>
+        `;
+    }
+    
+    function toggleChat() {
+        const chatModal = document.getElementById('chat-modal');
+        isChatOpen = !isChatOpen;
+        
+        if (isChatOpen) {
+            chatModal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden'; // Prevent background scrolling
+            // Load messages when opening chat
+            loadMessages();
+            // Start polling for new messages
+            chatInterval = setInterval(loadMessages, 3000);
+        } else {
+            chatModal.classList.add('hidden');
+            document.body.style.overflow = ''; // Restore scrolling
+            // Stop polling when chat is closed
+            if (chatInterval) {
+                clearInterval(chatInterval);
+                chatInterval = null;
+            }
+        }
+    }
+
+    
+    function joinCall() {
+        window.location.href = "{% url 'medical:video_call' appointment.id %}";
+    }
+    
+    // Chat functionality
+    function loadMessages() {
+        const url = lastMessageTime 
+            ? `/medical/appointments/${appointmentId}/get-messages/?since=${lastMessageTime}`
+            : `/medical/appointments/${appointmentId}/get-messages/`;
+            
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.messages.length > 0) {
+                    data.messages.forEach(msg => {
+                        addMessageToChat(msg);
+                        // Update last message time
+                        lastMessageTime = msg.created_at;
+                    });
+                }
+            })
+            .catch(error => console.error('Error loading messages:', error));
+    }
+    
+    function addMessageToChat(message) {
+        const chatMessages = document.getElementById('chat-messages');
+        
+        // Remove the "no messages" placeholder if it exists
+        const placeholder = chatMessages.querySelector('.text-center.text-gray-600');
+        if (placeholder) {
+            placeholder.remove();
+        }
+        
+        // Check if message already exists
+        if (document.getElementById(`msg-${message.id}`)) {
+            return;
+        }
+        
+        const messageDiv = document.createElement('div');
+        messageDiv.id = `msg-${message.id}`;
+        messageDiv.className = `flex ${message.is_self ? 'justify-end' : 'justify-start'} animate-fade-in`;
+        
+        // WhatsApp-like styling: sender (blue), receiver (white)
+        const bubbleClass = message.is_self 
+            ? 'bg-blue-600 text-white shadow-md' 
+            : 'bg-white text-gray-900 shadow-md';
+        
+        const tailClass = message.is_self
+            ? 'after:content-[""] after:absolute after:top-0 after:right-[-8px] after:border-8 after:border-transparent after:border-l-blue-600 after:border-t-blue-600'
+            : 'after:content-[""] after:absolute after:top-0 after:left-[-8px] after:border-8 after:border-transparent after:border-r-white after:border-t-white';
+        
+        messageDiv.innerHTML = `
+            <div class="max-w-[75%] sm:max-w-md">
+                <div class="${bubbleClass} rounded-lg px-3 py-2 sm:px-4 sm:py-2.5 relative ${tailClass}">
+                    <p class="text-sm sm:text-base leading-relaxed break-words">${escapeHtml(message.message)}</p>
+                    <div class="text-[10px] sm:text-xs ${message.is_self ? 'text-blue-100' : 'text-gray-500'} mt-1 text-right">
+                        ${formatTime(message.created_at)}
+                    </div>
+                </div>
+                ${!message.is_self ? `<div class="text-[10px] sm:text-xs text-gray-600 mt-0.5 ml-2 font-medium">Dr. ${message.sender.split(' ')[1] || message.sender}</div>` : ''}
+            </div>
+        `;
+        
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+    
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    function formatTime(timeString) {
+        const date = new Date(timeString);
+        return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    }
+    
+    // Handle chat form submission
+    document.getElementById('chat-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const messageInput = document.getElementById('message-input');
+        const message = messageInput.value.trim();
+        
+        if (!message) return;
+        
+        // Get CSRF token
+        const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        
+        fetch(`/medical/appointments/${appointmentId}/send-message/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': csrftoken
+            },
+            body: `message=${encodeURIComponent(message)}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                addMessageToChat(data);
+                messageInput.value = '';
+                lastMessageTime = data.created_at;
+            }
+        })
+        .catch(error => console.error('Error sending message:', error));
+    });
+    
+    // Initial load
+    updateCountdown();
+</script>
+
+{% csrf_token %}
+
+{% endblock %}

@@ -4,110 +4,141 @@
 
 {% block dashboard_content %}
     {% if pending_appointments_count > 0 %}
-        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-            <div class="flex items-center justify-between">
-                <div>
-                    <h3 class="text-lg font-semibold text-yellow-800 mb-2">
-                        📋 {{ pending_appointments_count }} Pending Appointment Request{{ pending_appointments_count|pluralize }}
-                    </h3>
-                    <p class="text-sm text-yellow-700">
-                        You have {{ pending_appointments_count }} appointment{{ pending_appointments_count|pluralize }} to review from hospital administrators.
-                    </p>
+    <div class="mb-6 rounded-lg border border-yellow-200 bg-yellow-50 p-4">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+                <h3 class="mb-2 text-lg font-semibold text-yellow-800">
+                    {{ pending_appointments_count }} Pending Appointment Request{{ pending_appointments_count|pluralize }}
+                </h3>
+                <p class="text-sm text-yellow-700">
+                    You have {{ pending_appointments_count }} appointment{{ pending_appointments_count|pluralize }} to review from hospital administrators.
+                </p>
+            </div>
+            <a href="{% url 'accounts:pending_appointments' %}" class="inline-flex items-center justify-center rounded-md border border-transparent bg-yellow-600 px-4 py-2 text-sm font-medium text-white hover:bg-yellow-700">
+                Review Now
+            </a>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">Today's Appointments</h1>
+        <p class="mt-2 text-gray-600">Your scheduled appointments for today</p>
+    </div>
+
+    <div class="mb-8 grid grid-cols-1 gap-6 md:grid-cols-3">
+        <div class="overflow-hidden rounded-lg bg-white shadow">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="flex h-8 w-8 items-center justify-center rounded-md bg-blue-500">
+                            <span class="text-sm font-medium text-white">A</span>
+                        </div>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="truncate text-sm font-medium text-gray-500">Today's Appointments</dt>
+                            <dd class="text-lg font-medium text-gray-900">{{ today_appointments_count|default:0 }}</dd>
+                        </dl>
+                    </div>
                 </div>
-                <a href="{% url 'accounts:pending_appointments' %}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-yellow-600 hover:bg-yellow-700">
-                    Review Now
+            </div>
+        </div>
+
+        <div class="overflow-hidden rounded-lg bg-white shadow">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="flex h-8 w-8 items-center justify-center rounded-md bg-green-500">
+                            <span class="text-sm font-medium text-white">P</span>
+                        </div>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="truncate text-sm font-medium text-gray-500">Total Patients</dt>
+                            <dd class="text-lg font-medium text-gray-900">{{ total_patients|default:0 }}</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="overflow-hidden rounded-lg bg-white shadow">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="flex h-8 w-8 items-center justify-center rounded-md bg-purple-500">
+                            <span class="text-sm font-medium text-white">W</span>
+                        </div>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="truncate text-sm font-medium text-gray-500">Waiting Room</dt>
+                            <dd class="text-lg font-medium text-gray-900">{{ waiting_room_count|default:0 }}</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="rounded-lg bg-white shadow">
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="mb-4 text-lg font-medium leading-6 text-gray-900">Today's Schedule</h3>
+            {% if today_appointments %}
+            <div class="space-y-3">
+                {% for appointment in today_appointments %}
+                <div class="rounded-md border border-gray-200 p-4">
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                            <p class="text-sm font-semibold text-gray-900">
+                                {{ appointment.patient.first_name }} {{ appointment.patient.last_name }}
+                            </p>
+                            <p class="mt-1 text-sm text-gray-600">
+                                {{ appointment.appointment_date|date:"M d, Y h:i A" }}
+                            </p>
+                            {% if appointment.symptoms %}
+                            <p class="mt-2 text-sm text-gray-500">
+                                Symptoms: {{ appointment.symptoms }}
+                            </p>
+                            {% endif %}
+                        </div>
+                        <div>
+                            {% if appointment.status == 'confirmed' %}
+                            <span class="inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">Confirmed</span>
+                            {% else %}
+                            <span class="inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700">Scheduled</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="py-8 text-center">
+                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <p class="mt-2 text-sm text-gray-500">No appointments scheduled for today</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="mt-8 rounded-lg bg-white shadow">
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="mb-4 text-lg font-medium leading-6 text-gray-900">Quick Actions</h3>
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <a href="{% url 'accounts:pending_appointments' %}" class="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+                    Review Requests
+                </a>
+                <a href="{% url 'accounts:dashboard' %}" class="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                    Refresh Dashboard
+                </a>
+                <a href="{% url 'accounts:logout' %}" class="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                    Logout
                 </a>
             </div>
         </div>
-    {% endif %}
-        
-        <div class="mb-8">
-        <h1 class="text-3xl font-bold text-gray-900">Today's Appointments</h1>
-        <p class="text-gray-600 mt-2">Your scheduled appointments for today</p>
     </div>
-
-<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-    <div class="bg-white overflow-hidden shadow rounded-lg">
-        <div class="p-5">
-            <div class="flex items-center">
-                <div class="flex-shrink-0">
-                    <div class="w-8 h-8 bg-blue-500 rounded-md flex items-center justify-center">
-                        <span class="text-white text-sm font-medium">A</span>
-                    </div>
-                </div>
-                <div class="ml-5 w-0 flex-1">
-                    <dl>
-                        <dt class="text-sm font-medium text-gray-500 truncate">Today's Appointments</dt>
-                        <dd class="text-lg font-medium text-gray-900">0</dd>
-                    </dl>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="bg-white overflow-hidden shadow rounded-lg">
-        <div class="p-5">
-            <div class="flex items-center">
-                <div class="flex-shrink-0">
-                    <div class="w-8 h-8 bg-green-500 rounded-md flex items-center justify-center">
-                        <span class="text-white text-sm font-medium">P</span>
-                    </div>
-                </div>
-                <div class="ml-5 w-0 flex-1">
-                    <dl>
-                        <dt class="text-sm font-medium text-gray-500 truncate">Total Patients</dt>
-                        <dd class="text-lg font-medium text-gray-900">0</dd>
-                    </dl>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="bg-white overflow-hidden shadow rounded-lg">
-        <div class="p-5">
-            <div class="flex items-center">
-                <div class="flex-shrink-0">
-                    <div class="w-8 h-8 bg-purple-500 rounded-md flex items-center justify-center">
-                        <span class="text-white text-sm font-medium">W</span>
-                    </div>
-                </div>
-                <div class="ml-5 w-0 flex-1">
-                    <dl>
-                        <dt class="text-sm font-medium text-gray-500 truncate">Waiting Room</dt>
-                        <dd class="text-lg font-medium text-gray-900">0</dd>
-                    </dl>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="bg-white shadow rounded-lg">
-    <div class="px-4 py-5 sm:p-6">
-        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Today's Schedule</h3>
-        <div class="text-center py-8">
-            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            <p class="mt-2 text-sm text-gray-500">No appointments scheduled for today</p>
-        </div>
-    </div>
-</div>
-
-<div class="mt-8 bg-white shadow rounded-lg">
-    <div class="px-4 py-5 sm:p-6">
-        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Quick Actions</h3>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <button class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700">
-                Set Availability
-            </button>
-            <button class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-                View Patients
-            </button>
-            <button class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-                View History
-            </button>
-        </div>
-    </div>
-</div>
 {% endblock %}

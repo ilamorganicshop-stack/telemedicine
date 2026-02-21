@@ -1,0 +1,149 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Patient Portal - Telemedicine{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+    <div class="flex h-screen overflow-hidden">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-white shadow-lg flex-shrink-0 hidden md:block">
+            <div class="h-full flex flex-col">
+                <!-- Logo/Header -->
+                <div class="p-6 border-b border-gray-200">
+                    <h1 class="text-xl font-bold text-blue-600">Patient Portal</h1>
+                    <p class="text-sm text-gray-600 mt-1">{{ user.first_name }} {{ user.last_name }}</p>
+                </div>
+
+                <!-- Navigation -->
+                <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
+                    <a href="{% url 'accounts:dashboard' %}" class="flex items-center px-4 py-3 text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                        </svg>
+                        Dashboard
+                    </a>
+
+                    <!-- My Hospital -->
+                    <div class="pt-4">
+                        <h3 class="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">My Hospital</h3>
+                        {% if user.patient_profile.hospital %}
+                        <div class="px-4 py-3 bg-gray-50 rounded-lg">
+                            <p class="font-semibold text-gray-900 text-sm">{{ user.patient_profile.hospital.name }}</p>
+                            <p class="text-xs text-gray-600 mt-1">{{ user.patient_profile.hospital.address }}</p>
+                            <p class="text-xs text-gray-600">{{ user.patient_profile.hospital.phone }}</p>
+                        </div>
+                        {% else %}
+                        <p class="px-4 text-sm text-gray-500">No hospital assigned</p>
+                        {% endif %}
+                    </div>
+
+                    <!-- My Doctors -->
+                    <div class="pt-4">
+                        <h3 class="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">My Doctors</h3>
+                        <a href="{% url 'medical:doctor_list' %}" class="flex items-center px-4 py-3 text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors">
+                            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                            </svg>
+                            View All Doctors
+                        </a>
+                    </div>
+                </nav>
+
+                <!-- Logout Button -->
+                <div class="p-4 border-t border-gray-200">
+                    <a href="{% url 'accounts:logout' %}" class="flex items-center px-4 py-3 text-red-600 hover:bg-red-50 rounded-lg transition-colors w-full">
+                        <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                        </svg>
+                        Logout
+                    </a>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Mobile Menu Button -->
+        <button id="mobile-menu-btn" class="md:hidden fixed top-4 left-4 z-50 bg-white p-2 rounded-lg shadow-lg">
+            <svg class="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+        </button>
+
+        <!-- Mobile Sidebar Overlay -->
+        <div id="mobile-sidebar" class="md:hidden fixed inset-0 z-40 hidden">
+            <div class="absolute inset-0 bg-black bg-opacity-50" onclick="toggleMobileSidebar()"></div>
+            <aside class="absolute left-0 top-0 bottom-0 w-64 bg-white shadow-lg">
+                <div class="h-full flex flex-col">
+                    <div class="p-6 border-b border-gray-200 flex justify-between items-center">
+                        <div>
+                            <h1 class="text-xl font-bold text-blue-600">Patient Portal</h1>
+                            <p class="text-sm text-gray-600 mt-1">{{ user.first_name }} {{ user.last_name }}</p>
+                        </div>
+                        <button onclick="toggleMobileSidebar()" class="text-gray-500 hover:text-gray-700">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
+                        <a href="{% url 'accounts:dashboard' %}" class="flex items-center px-4 py-3 text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors">
+                            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                            </svg>
+                            Dashboard
+                        </a>
+
+                        <div class="pt-4">
+                            <h3 class="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">My Hospital</h3>
+                            {% if user.patient_profile.hospital %}
+                            <div class="px-4 py-3 bg-gray-50 rounded-lg">
+                                <p class="font-semibold text-gray-900 text-sm">{{ user.patient_profile.hospital.name }}</p>
+                                <p class="text-xs text-gray-600 mt-1">{{ user.patient_profile.hospital.address }}</p>
+                                <p class="text-xs text-gray-600">{{ user.patient_profile.hospital.phone }}</p>
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="pt-4">
+                            <h3 class="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">My Doctors</h3>
+                            <a href="{% url 'medical:doctor_list' %}" class="flex items-center px-4 py-3 text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors">
+                                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                                </svg>
+                                View All Doctors
+                            </a>
+                        </div>
+                    </nav>
+
+                    <div class="p-4 border-t border-gray-200">
+                        <a href="{% url 'accounts:logout' %}" class="flex items-center px-4 py-3 text-red-600 hover:bg-red-50 rounded-lg transition-colors w-full">
+                            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                            </svg>
+                            Logout
+                        </a>
+                    </div>
+                </div>
+            </aside>
+        </div>
+
+        <!-- Main Content -->
+        <main class="flex-1 overflow-y-auto">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <script>
+        function toggleMobileSidebar() {
+            const sidebar = document.getElementById('mobile-sidebar');
+            sidebar.classList.toggle('hidden');
+        }
+
+        document.getElementById('mobile-menu-btn').addEventListener('click', toggleMobileSidebar);
+    </script>
+</body>
+</html>
