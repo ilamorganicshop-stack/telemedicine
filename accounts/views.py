@@ -136,6 +136,7 @@ def dashboard_view(request):
                 appointment_date__date=today,
                 status__in=['scheduled', 'confirmed']
             ).order_by('appointment_date')
+            waiting_room_count = today_appointments.filter(status='confirmed').count()
             
             # Get pending appointment requests
             pending_appointments = Appointment.objects.filter(
@@ -152,6 +153,7 @@ def dashboard_view(request):
                 'doctor_profile': doctor_profile,
                 'today_appointments': today_appointments,
                 'today_appointments_count': today_appointments.count(),
+                'waiting_room_count': waiting_room_count,
                 'pending_appointments': pending_appointments,
                 'pending_appointments_count': pending_appointments.count(),
                 'total_patients': total_patients,
@@ -187,11 +189,17 @@ def dashboard_view(request):
         except PatientProfile.DoesNotExist:
             patient_profile = None
             
-        # Only show future appointments
+        # Only show future appointments with scheduled or confirmed status
         upcoming_appointments = Appointment.objects.filter(
             patient=user,
             appointment_date__gte=timezone.now(),
-            status__in=['scheduled', 'confirmed', 'requested', 'pending_approval']
+            status__in=['scheduled', 'confirmed']
+        ).order_by('appointment_date')
+        
+        # Show pending appointment requests separately
+        pending_requests = Appointment.objects.filter(
+            patient=user,
+            status__in=['requested', 'pending_approval']
         ).order_by('appointment_date')
         
         completed_appointments = Appointment.objects.filter(
@@ -209,6 +217,8 @@ def dashboard_view(request):
             'patient_profile': patient_profile,
             'upcoming_appointments': upcoming_appointments,
             'upcoming_appointments_count': upcoming_appointments.count(),
+            'pending_requests': pending_requests,
+            'pending_requests_count': pending_requests.count(),
             'completed_appointments': completed_appointments,
             'doctor_count': doctor_count,
         }
@@ -663,6 +673,10 @@ def khalti_verify(request):
     
     try:
         patient_profile = user.patient_profile
+        
+        # Clear payment attempt flag
+        if 'payment_init_attempted' in request.session:
+            del request.session['payment_init_attempted']
         
         if patient_profile.payment_status:
             messages.info(request, 'Payment already completed')
