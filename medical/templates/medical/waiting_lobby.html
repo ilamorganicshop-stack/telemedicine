@@ -33,11 +33,11 @@
 <div class="max-w-6xl mx-auto py-4 sm:py-8 px-2 sm:px-4">
     <div class="bg-white shadow-lg rounded-lg overflow-hidden">
         <!-- Header -->
-        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 sm:px-6 py-6 sm:py-8 text-white">
+        <div class="px-4 sm:px-6 py-6 sm:py-8 bg-white">
             <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
                 <div class="text-center sm:text-left flex-1">
-                    <h1 class="text-2xl sm:text-3xl font-bold mb-2">Waiting Lobby</h1>
-                    <p class="text-blue-100 text-sm sm:text-base">Your appointment is scheduled. Please wait for the call to begin.</p>
+                    <h1 class="text-2xl sm:text-3xl font-bold mb-2 text-gray-900">Waiting Lobby</h1>
+                    <p class="text-sm sm:text-base text-gray-900">Your appointment is scheduled. Please wait for the call to begin.</p>
                 </div>
                 <button 
                     onclick="toggleChat()"
@@ -160,18 +160,18 @@
 <div id="chat-modal" class="fixed inset-0 z-50 hidden bg-white">
     <div class="h-screen flex flex-col">
         <!-- Chat Header -->
-        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-4 text-white shadow-lg flex justify-between items-center">
+        <div class="bg-white px-4 py-4 shadow-lg flex justify-between items-center border-b border-gray-200">
             <div class="flex items-center gap-3 flex-1 min-w-0">
-                <button onclick="toggleChat()" class="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-colors flex-shrink-0">
+                <button onclick="toggleChat()" class="text-gray-700 hover:bg-gray-100 rounded-full p-2 transition-colors flex-shrink-0">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                     </svg>
                 </button>
                 <div class="min-w-0 flex-1">
-                    <h2 class="text-lg sm:text-xl font-bold truncate">
+                    <h2 class="text-lg sm:text-xl font-bold truncate text-gray-900">
                         Dr. {{ appointment.doctor.first_name }} {{ appointment.doctor.last_name }}
                     </h2>
-                    <p class="text-xs sm:text-sm text-blue-100 truncate">{{ appointment.doctor.doctor_profile.specialization }}</p>
+                    <p class="text-xs sm:text-sm truncate text-gray-900">{{ appointment.doctor.doctor_profile.specialization }}</p>
                 </div>
             </div>
         </div>

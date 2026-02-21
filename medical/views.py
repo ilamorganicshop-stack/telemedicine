@@ -29,7 +29,15 @@ def hospital_detail(request, hospital_id):
 
 @login_required
 def doctor_list(request):
-    doctors = DoctorProfile.objects.select_related('user', 'hospital').all()
+    # Filter doctors by patient's hospital if user is a patient
+    if request.user.is_patient:
+        try:
+            patient_hospital = request.user.patient_profile.hospital
+            doctors = DoctorProfile.objects.select_related('user', 'hospital').filter(hospital=patient_hospital)
+        except:
+            doctors = DoctorProfile.objects.none()
+    else:
+        doctors = DoctorProfile.objects.select_related('user', 'hospital').all()
     return render(request, 'medical/doctor_list.html', {'doctors': doctors})
 
 

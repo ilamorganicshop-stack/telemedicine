@@ -204,13 +204,15 @@ def dashboard_view(request):
         
         completed_appointments = Appointment.objects.filter(
             patient=user,
-            status='completed'
+            status='completed',
+            video_call_status='ended'
         ).count()
         
-        # Get unique doctors the patient has seen
+        # Get unique doctors the patient has seen (completed appointments only)
         doctor_count = Appointment.objects.filter(
             patient=user,
-            status='completed'
+            status='completed',
+            video_call_status='ended'
         ).values('doctor').distinct().count()
         
         patient_context = {
