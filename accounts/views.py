@@ -137,6 +137,12 @@ def dashboard_view(request):
                 status__in=['scheduled', 'confirmed']
             ).order_by('appointment_date')
             
+            # Get pending appointment requests
+            pending_appointments = Appointment.objects.filter(
+                doctor=user,
+                status__in=['requested', 'pending_approval']
+            ).order_by('appointment_date')
+            
             total_patients = Appointment.objects.filter(
                 doctor=user,
                 status='completed'
@@ -146,6 +152,8 @@ def dashboard_view(request):
                 'doctor_profile': doctor_profile,
                 'today_appointments': today_appointments,
                 'today_appointments_count': today_appointments.count(),
+                'pending_appointments': pending_appointments,
+                'pending_appointments_count': pending_appointments.count(),
                 'total_patients': total_patients,
             })
             template_name = 'accounts/doctor_dashboard.html'

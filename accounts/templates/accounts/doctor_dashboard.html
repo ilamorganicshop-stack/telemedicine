@@ -4,15 +4,22 @@
 
 {% block dashboard_content %}
     {% if pending_appointments_count > 0 %}
-            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-                <h3 class="text-lg font-semibold text-yellow-800 mb-2">
-                    📋 {{ pending_appointments_count }} Pending Appointment Request{{ pending_appointments_count|pluralize }}
-                </h3>
-                <p class="text-sm text-yellow-700">
-                    You have {{ pending_appointments_count }} appointment{{ pending_appointments_count|pluralize }} to review from hospital administrators.
-                </p>
+        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg font-semibold text-yellow-800 mb-2">
+                        📋 {{ pending_appointments_count }} Pending Appointment Request{{ pending_appointments_count|pluralize }}
+                    </h3>
+                    <p class="text-sm text-yellow-700">
+                        You have {{ pending_appointments_count }} appointment{{ pending_appointments_count|pluralize }} to review from hospital administrators.
+                    </p>
+                </div>
+                <a href="{% url 'accounts:pending_appointments' %}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-yellow-600 hover:bg-yellow-700">
+                    Review Now
+                </a>
             </div>
-        {% endif %}
+        </div>
+    {% endif %}
         
         <div class="mb-8">
         <h1 class="text-3xl font-bold text-gray-900">Today's Appointments</h1>
