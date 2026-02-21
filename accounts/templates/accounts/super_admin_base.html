@@ -12,14 +12,14 @@
 {% block messages %}{% endblock %}
 
 {% block content %}
-<div class="min-h-screen bg-slate-950 text-slate-100">
+<div class="min-h-screen overflow-x-hidden bg-slate-950 text-slate-100">
     <div class="relative min-h-screen">
         <div class="pointer-events-none absolute inset-0">
             <div class="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.12),_transparent_55%)]"></div>
             <div class="absolute inset-0 bg-[linear-gradient(to_right,_rgba(148,163,184,0.08)_1px,_transparent_1px),linear-gradient(to_bottom,_rgba(148,163,184,0.08)_1px,_transparent_1px)] bg-[size:44px_44px] opacity-40"></div>
         </div>
 
-        <div class="relative flex min-h-screen">
+        <div class="relative flex min-h-screen overflow-x-hidden">
             <aside class="hidden w-72 flex-col border-r border-white/10 bg-slate-950/80 px-6 py-8 backdrop-blur lg:flex">
                 <div class="flex items-center gap-3">
                     <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-600/90 font-semibold text-white" style="font-family: 'Sora', sans-serif;">
@@ -104,7 +104,7 @@
                 </div>
             </aside>
 
-            <main class="flex-1 px-6 py-8 lg:px-10">
+            <main class="min-w-0 flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-10">
                 <div class="lg:hidden">
                     <details class="group rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
                         <summary class="flex cursor-pointer items-center justify-between text-sm font-semibold text-slate-100">
@@ -147,7 +147,7 @@
                     </div>
                 {% endif %}
 
-                <div class="mt-6">
+                <div class="mt-6 min-w-0">
                     {% block super_admin_content %}{% endblock %}
                 </div>
             </main>
