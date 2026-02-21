@@ -156,8 +156,7 @@ def dashboard_view(request):
                 'pending_appointments_count': pending_appointments.count(),
                 'total_patients': total_patients,
             })
-            template_name = 'accounts/doctor_dashboard.html'
-            return render(request, template_name, context)
+            return render(request, 'accounts/doctor_dashboard.html', context)
         else:
             # Doctor doesn't have proper profile/hospital assignment
             return redirect('accounts:login')
@@ -188,10 +187,11 @@ def dashboard_view(request):
         except PatientProfile.DoesNotExist:
             patient_profile = None
             
+        # Only show future appointments
         upcoming_appointments = Appointment.objects.filter(
             patient=user,
             appointment_date__gte=timezone.now(),
-            status__in=['scheduled', 'confirmed']
+            status__in=['scheduled', 'confirmed', 'requested', 'pending_approval']
         ).order_by('appointment_date')
         
         completed_appointments = Appointment.objects.filter(
