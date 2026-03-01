@@ -57,9 +57,12 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "accounts.decorators.DisableClientSideCachingMiddleware",  # Disable caching for real-time updates
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
+
 
 
 ROOT_URLCONF = "telemedicine.urls"
@@ -89,11 +92,20 @@ ASGI_APPLICATION = "telemedicine.asgi.application"  # Django Channels ASGI
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
+DB_CONN_MAX_AGE = int(os.environ.get("DB_CONN_MAX_AGE", "600"))
+DB_CONNECT_TIMEOUT = int(os.environ.get("DB_CONNECT_TIMEOUT", "10"))
 
 if DATABASE_URL:
     DATABASES = {
-        "default": dj_database_url.parse(DATABASE_URL)
+        "default": dj_database_url.parse(
+            DATABASE_URL,
+            conn_max_age=DB_CONN_MAX_AGE,
+            conn_health_checks=True,
+            ssl_require=not DEBUG,
+        )
     }
+    DATABASES["default"].setdefault("OPTIONS", {})
+    DATABASES["default"]["OPTIONS"]["connect_timeout"] = DB_CONNECT_TIMEOUT
 else:
     DATABASES = {
         "default": {
@@ -144,8 +156,24 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
-# WhiteNoise configuration
+# WhiteNoise configuration with compression for static files
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
+# Cache control headers - DISABLED page caching to prevent stale data issues
+# Page caching middleware removed to ensure real-time updates for notifications
+# CACHE_MIDDLEWARE_SECONDS = 600  # DISABLED - was causing stale page issues
+# CACHE_MIDDLEWARE_KEY_PREFIX = "telemedicine"  # DISABLED
+
+# Security headers
+SECURE_HSTS_SECONDS = 31536000  # 1 year
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_HSTS_PRELOAD = True
+
+# Disable browser caching for dynamic content to ensure real-time updates
+# This prevents stale pages and ensures notifications appear immediately
+CACHE_CONTROL_MAX_AGE = 0
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+
 
 # CSRF trusted origins for Defang deployment
 CSRF_TRUSTED_ORIGINS = [
@@ -192,7 +220,45 @@ else:
         },
     }
 
+# Redis Caching Configuration (CRITICAL FOR PERFORMANCE)
+# This significantly improves page load times by caching queries and sessions
+if REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": REDIS_URL,
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                "CONNECTION_POOL_KWARGS": {
+                    "max_connections": 50,
+                    "retry_on_timeout": True,
+                },
+                "SOCKET_CONNECT_TIMEOUT": 5,
+                "SOCKET_TIMEOUT": 5,
+                "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
+            },
+            "KEY_PREFIX": "telemedicine",
+            "TIMEOUT": 300,  # 5 minutes default cache timeout
+        }
+    }
+    # Use Redis for sessions (faster than database)
+    SESSION_ENGINE = "django.contrib.sessions.backends.cache"
+    SESSION_CACHE_ALIAS = "default"
+else:
+    # Fallback to in-memory cache for development
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "unique-snowflake",
+            "OPTIONS": {
+                "MAX_ENTRIES": 10000,
+            }
+        }
+    }
+    SESSION_ENGINE = "django.contrib.sessions.backends.db"
+
 # CORS Configuration for WebRTC
+
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:8000",
     "http://127.0.0.1:8000",

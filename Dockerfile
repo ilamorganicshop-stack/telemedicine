@@ -23,5 +23,5 @@ COPY . .
 # Collect static files
 RUN python manage.py collectstatic --noinput
 
-# Run migrations and start server
-CMD ["sh", "-c", "python manage.py migrate && python manage.py create_superadmin && gunicorn telemedicine.wsgi:application --bind 0.0.0.0:8000"]
+# Run migrations and start ASGI server (WebSocket support)
+CMD ["sh", "-c", "python manage.py migrate && python manage.py create_superadmin && daphne --proxy-headers -b 0.0.0.0 -p 8000 telemedicine.asgi:application"]

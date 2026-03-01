@@ -38,6 +38,16 @@
                     <p class="text-sm sm:text-base text-gray-900">Your appointment is scheduled. Please wait for the call to begin.</p>
                 </div>
                 <div class="flex flex-col sm:flex-row gap-3">
+                    <button
+                        id="start-call-btn"
+                        type="button"
+                        onclick="startVideoCall()"
+                        class="px-4 sm:px-6 py-2.5 sm:py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center justify-center shadow-lg text-sm sm:text-base whitespace-nowrap">
+                        <svg class="w-4 h-4 sm:w-5 sm:h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        Call Patient
+                    </button>
                     <a
                         href="{% url 'medical:test_devices' %}"
                         class="px-4 sm:px-6 py-2.5 sm:py-3 bg-white text-indigo-600 rounded-lg font-semibold hover:bg-indigo-50 transition-colors flex items-center shadow-lg text-sm sm:text-base whitespace-nowrap">
@@ -155,6 +165,7 @@
     let timeRemaining = {{ time_until_appointment }};
     const appointmentId = {{ appointment.id }};
     const currentUserId = {{ user.id }};
+    let isStartingCall = false;
     
     const countdownInterval = setInterval(updateCountdown, 1000);
     
@@ -220,6 +231,55 @@
             alert('Error updating appointment time');
             location.reload();
         });
+    }
+
+    function getCsrfToken() {
+        const cookieValue = `; ${document.cookie}`;
+        const parts = cookieValue.split('; csrftoken=');
+        if (parts.length === 2) {
+            return parts.pop().split(';').shift();
+        }
+        return '';
+    }
+
+    async function startVideoCall() {
+        if (isStartingCall) return;
+
+        isStartingCall = true;
+        const startCallBtn = document.getElementById('start-call-btn');
+        if (startCallBtn) {
+            startCallBtn.disabled = true;
+            startCallBtn.classList.add('opacity-70', 'cursor-not-allowed');
+        }
+
+        try {
+            const payload = new URLSearchParams();
+            payload.append('return_to', window.location.pathname + window.location.search);
+
+            const response = await fetch(`/medical/appointments/${appointmentId}/video-call/start/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': getCsrfToken(),
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: payload.toString(),
+            });
+
+            const data = await response.json();
+            if (!response.ok || !data.success || !data.video_call_url) {
+                throw new Error(data.error || 'Failed to start the video call.');
+            }
+
+            window.location.href = data.video_call_url;
+        } catch (error) {
+            alert(error.message || 'Could not start call. Please try again.');
+            if (startCallBtn) {
+                startCallBtn.disabled = false;
+                startCallBtn.classList.remove('opacity-70', 'cursor-not-allowed');
+            }
+            isStartingCall = false;
+        }
     }
     
     updateCountdown();

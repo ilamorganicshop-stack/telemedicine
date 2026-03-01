@@ -19,7 +19,12 @@
     }
 
     .call-shell {
-        min-height: calc(100vh - 6rem);
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        min-height: 100vh;
+        padding: clamp(8px, 2vw, 20px);
+        background: rgba(6, 10, 16, 0.94);
         color: var(--text-main);
     }
 
@@ -29,6 +34,11 @@
         border-radius: 18px;
         padding: 14px;
         box-shadow: 0 22px 45px rgba(0, 0, 0, 0.35);
+        height: 100%;
+        max-width: 1480px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
     }
 
     .call-topbar {
@@ -59,16 +69,25 @@
     .video-stage {
         position: relative;
         width: 100%;
-        height: min(76vh, 820px);
+        max-width: 600px;
+        margin: 0 auto;
+        flex: 1;
+        min-height: 0;
+        height: auto;
         border-radius: 16px;
         overflow: hidden;
         background: #000;
         box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
 
     .remote-video {
         width: 100%;
         height: 100%;
+        max-height: 85vh;
+        aspect-ratio: 9 / 16;
         object-fit: cover;
         background: #000;
     }
@@ -131,11 +150,11 @@
 
     .local-video-wrap {
         position: absolute;
-        top: 20px;
-        right: 20px;
-        width: clamp(160px, 20vw, 248px);
-        aspect-ratio: 16 / 10;
-        border-radius: 14px;
+        top: 12px;
+        right: 12px;
+        width: clamp(120px, 15vw, 180px);
+        aspect-ratio: 9 / 16;
+        border-radius: 12px;
         overflow: hidden;
         z-index: 12;
         background: #0f141b;
@@ -166,7 +185,7 @@
     .controls-row {
         position: absolute;
         left: 50%;
-        bottom: 22px;
+        bottom: 40px;
         transform: translateX(-50%);
         display: flex;
         gap: 14px;
@@ -217,14 +236,40 @@
     }
 
     @media (max-width: 640px) {
+        .call-shell {
+            padding: 0;
+            safe-area-inset: 0;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+        }
+
         .call-frame {
-            border-radius: 14px;
-            padding: 10px;
+            border-radius: 0;
+            border: none;
+            padding: 0;
+            box-shadow: none;
+            height: 100%;
+        }
+        
+        .call-topbar {
+            display: none;
         }
 
         .video-stage {
-            height: min(74vh, 680px);
-            border-radius: 12px;
+            border-radius: 0;
+            max-width: 100%;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .remote-video {
+            max-height: 90vh;
         }
 
         .local-video-wrap {
@@ -235,7 +280,7 @@
         }
 
         .controls-row {
-            bottom: 14px;
+            bottom: 90px;
             padding: 10px 12px;
             gap: 10px;
         }
@@ -252,7 +297,7 @@
 <div class="call-shell">
     <div class="call-frame">
         <div class="call-topbar">
-            <a href="{% url 'medical:chat' appointment.id %}" class="call-back">Back to Chat</a>
+            <a href="{{ return_to }}" class="call-back">Back</a>
             <p class="call-peer">
                 {% if user_type == 'doctor' %}
                     Patient: {{ appointment.patient.first_name }} {{ appointment.patient.last_name }}
@@ -310,6 +355,7 @@
     const roomId = '{{ room_id }}';
     const userType = '{{ user_type }}';
     const appointmentId = '{{ appointment.id }}';
+    const returnTo = '{{ return_to|escapejs }}';
 
     let localStream = null;
     let remoteStream = null;
@@ -320,9 +366,26 @@
     let isEndingCall = false;
     let offerRetryTimer = null;
     let isCreatingOffer = false;
+    let iceCandidateQueue = [];
+    let vibrationTimer = null;
+    let isRinging = false;
 
+    // Debug logging
+    console.log('=== Video Call Debug Info ===');
+    console.log('Room ID:', roomId);
+    console.log('User Type:', userType);
+    console.log('Window Location:', window.location.href);
+    console.log('Protocol:', window.location.protocol);
+    console.log('Host:', window.location.host);
+    
+    // Fix WebSocket URL for production - use wss for https, ws for http
     const wsScheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const wsUrl = `${wsScheme}://${window.location.host}/ws/video-call/${roomId}/`;
+    // Use the current host which should work with Defang's deployment
+    const wsHost = window.location.host;
+    const wsUrl = `${wsScheme}://${wsHost}/ws/video-call/${roomId}/`;
+    
+    console.log('WebSocket URL:', wsUrl);
+    console.log('=============================');
 
     const iceServers = {
         iceServers: [
@@ -363,63 +426,119 @@
         }
     }
 
+    function startRingVibration() {
+        if (!navigator.vibrate || isRinging) return;
+        isRinging = true;
+        console.log('Starting continuous ring vibration');
+        vibrationTimer = setInterval(() => {
+            // Ring vibration pattern: vibrate 400ms, pause 200ms, repeat
+            navigator.vibrate([400, 200]);
+        }, 600);
+    }
+
+    function stopRingVibration() {
+        if (vibrationTimer) {
+            clearInterval(vibrationTimer);
+            vibrationTimer = null;
+            isRinging = false;
+            if (navigator.vibrate) {
+                navigator.vibrate(0); // stop any ongoing vibration
+            }
+            console.log('Stopped ring vibration');
+        }
+    }
+
     function initializeWebSocket() {
+        console.log('Initializing WebSocket connection...');
         websocket = new WebSocket(wsUrl);
 
         websocket.onopen = function () {
+            console.log('WebSocket connected successfully!');
+            console.log('WebSocket readyState:', websocket.readyState);
+            console.log('WebSocket URL:', wsUrl);
             setConnectingStatus('Connected to signaling server.', 'connected');
-            websocket.send(
-                JSON.stringify({
-                    type: 'join',
-                    user_type: userType,
-                    user_name: userType === 'doctor' ? 'Doctor' : 'Patient',
-                })
-            );
+            
+            const joinMessage = {
+                type: 'join',
+                user_type: userType,
+                user_name: userType === 'doctor' ? 'Doctor' : 'Patient',
+            };
+            console.log('Sending join message:', JSON.stringify(joinMessage));
+            websocket.send(JSON.stringify(joinMessage));
+            console.log('Join message sent as:', userType);
+            
+            // Don't create offer immediately - wait for patient to join
             if (userType === 'doctor') {
+                console.log('Doctor: Starting offer retry mechanism (will create offer when patient joins)');
                 startOfferRetry();
-                createOfferIfPossible();
             }
         };
 
         websocket.onmessage = function (event) {
-            const data = JSON.parse(event.data);
-            handleSignalingMessage(data);
+            console.log('WebSocket message received:', event.data);
+            try {
+                const data = JSON.parse(event.data);
+                console.log('Parsed message data:', data);
+                handleSignalingMessage(data);
+            } catch (error) {
+                console.error('Error parsing WebSocket message:', error);
+                console.error('Raw message:', event.data);
+            }
         };
 
         websocket.onerror = function (error) {
             console.error('WebSocket error:', error);
+            console.error('WebSocket readyState:', websocket.readyState);
             setConnectingStatus('Connection issue. Retrying...', 'warning');
         };
 
-        websocket.onclose = function () {
+        websocket.onclose = function (event) {
+            console.log('WebSocket closed. Code:', event.code, 'Reason:', event.reason);
             setConnectingStatus('Reconnecting...', 'warning');
             if (!isEndingCall) {
+                console.log('Attempting to reconnect in 3 seconds...');
                 setTimeout(initializeWebSocket, 3000);
             }
         };
     }
 
     function handleSignalingMessage(data) {
+        console.log('Handling signaling message type:', data.type, 'Data:', data);
         switch (data.type) {
             case 'offer':
+                console.log('Received offer, handling...');
                 handleOffer(data.offer);
                 break;
             case 'answer':
+                console.log('Received answer, handling...');
                 handleAnswer(data.answer);
                 break;
             case 'ice-candidate':
+                console.log('Received ICE candidate');
                 handleIceCandidate(data.candidate);
                 break;
             case 'user-joined':
+                console.log('User joined:', data.user_type, 'Current user:', userType);
                 if (data.user_type !== userType) {
+                    console.log('Other participant joined! Starting connection...');
                     setConnectingStatus('Participant detected. Connecting media...', 'connecting');
                     setWaitingState(true, 'Connecting call...');
+                    
+                    // Start continuous vibration for patient when doctor joins (incoming call)
+                    if (userType === 'patient' && navigator.vibrate) {
+                        startRingVibration();
+                        console.log('Patient: Starting ring vibration - incoming call');
+                    }
+                    
                     if (userType === 'doctor') {
-                        createOfferIfPossible();
+                        console.log('Doctor: Patient joined! Creating offer IMMEDIATELY');
+                        // Create offer immediately instead of waiting for retry
+                        setTimeout(() => createOfferIfPossible(), 100);
                     }
                 }
                 break;
             case 'user-left':
+                console.log('User left:', data.user_type);
                 if (data.user_type !== userType) {
                     setConnectingStatus('Participant left. Waiting to reconnect...', 'warning');
                     setWaitingState(true);
@@ -428,52 +547,90 @@
                     }
                 }
                 break;
+            case 'peer-joined':
+                console.log('Peer joined event received');
+                break;
+            case 'peer-left':
+                console.log('Peer left event received');
+                break;
+            case 'call-ended':
+                console.log('Call ended by:', data.user_type);
+                // Close modal for both users
+                handleCallEnded();
+                break;
             default:
+                console.log('Unknown message type:', data.type);
                 break;
         }
     }
 
     async function initializeWebRTC() {
+        console.log('Initializing WebRTC...');
         try {
+            console.log('Requesting media devices...');
             localStream = await navigator.mediaDevices.getUserMedia({
                 video: {
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 },
+                    width: { min: 640, ideal: 1280, max: 1920 },
+                    height: { min: 480, ideal: 720, max: 1080 },
+                    aspectRatio: { ideal: 16/9 },
                     facingMode: 'user',
+                    frameRate: { ideal: 30, max: 30 }
                 },
                 audio: {
                     echoCancellation: true,
                     noiseSuppression: true,
-                    sampleRate: 44100,
+                    autoGainControl: true,
+                    sampleRate: 48000,
                 },
             });
+            console.log('Media devices acquired successfully');
 
             const localVideo = document.getElementById('localVideo');
             localVideo.srcObject = localStream;
+            console.log('Local video stream set');
 
             createPeerConnection();
 
             localStream.getTracks().forEach((track) => {
+                console.log('Adding track to peer connection:', track.kind);
                 peerConnection.addTrack(track, localStream);
             });
 
+            console.log('Initializing WebSocket after WebRTC setup...');
             initializeWebSocket();
         } catch (error) {
             console.error('Error accessing media devices:', error);
-            alert('Could not access camera or microphone. Please check permissions.');
+            console.error('Error name:', error.name);
+            console.error('Error message:', error.message);
+            alert('Could not access camera or microphone. Please check permissions. Error: ' + error.message);
         }
     }
 
     function createPeerConnection() {
+        console.log('Creating peer connection with ICE servers:', iceServers);
+        
+        // Clear any queued ICE candidates from previous connection
+        iceCandidateQueue = [];
+        
         peerConnection = new RTCPeerConnection(iceServers);
 
         peerConnection.ontrack = function (event) {
+            console.log('Remote track received:', event.track.kind);
             if (event.streams && event.streams[0]) {
+                console.log('Remote stream received, setting video source');
                 remoteStream = event.streams[0];
                 const remoteVideo = document.getElementById('remoteVideo');
                 remoteVideo.srcObject = remoteStream;
                 setWaitingState(false);
                 setConnectingStatus('Connected', 'connected');
+                
+                // Stop ring vibration and vibrate connection confirmation
+                stopRingVibration();
+                if (navigator.vibrate) {
+                    navigator.vibrate([300]); // connection confirmation vibration
+                    console.log('Phone vibration - call connected');
+                }
+                
                 if (userType === 'doctor') {
                     stopOfferRetry();
                 }
@@ -482,6 +639,7 @@
 
         peerConnection.onicecandidate = function (event) {
             if (event.candidate && websocket && websocket.readyState === WebSocket.OPEN) {
+                console.log('Sending ICE candidate');
                 websocket.send(
                     JSON.stringify({
                         type: 'ice-candidate',
@@ -493,6 +651,7 @@
 
         peerConnection.onconnectionstatechange = function () {
             const state = peerConnection.connectionState;
+            console.log('Peer connection state changed to:', state);
             if (state === 'connected') {
                 setWaitingState(false);
                 setConnectingStatus('Connected', 'connected');
@@ -508,6 +667,10 @@
                 }
             }
         };
+        
+        peerConnection.oniceconnectionstatechange = function() {
+            console.log('ICE connection state:', peerConnection.iceConnectionState);
+        };
     }
 
     function canCreateOffer() {
@@ -516,7 +679,7 @@
             peerConnection &&
             websocket &&
             websocket.readyState === WebSocket.OPEN &&
-            peerConnection.signalingState === 'stable' &&
+            (peerConnection.signalingState === 'stable' || peerConnection.signalingState === 'have-local-offer') &&
             !isCreatingOffer
         );
     }
@@ -529,13 +692,16 @@
 
     function startOfferRetry() {
         if (offerRetryTimer || userType !== 'doctor') return;
+        console.log('Doctor: Starting offer retry with 800ms interval for fast connection');
         offerRetryTimer = setInterval(() => {
             if (remoteStream || isEndingCall) {
                 stopOfferRetry();
                 return;
             }
-            createOfferIfPossible();
-        }, 2500);
+            if (peerConnection && peerConnection.connectionState !== 'connected') {
+                createOfferIfPossible();
+            }
+        }, 800);  // Fast retry for instant connection
     }
 
     function stopOfferRetry() {
@@ -545,11 +711,17 @@
     }
 
     async function createOffer() {
-        if (!canCreateOffer()) return;
+        if (!canCreateOffer()) {
+            console.log('Cannot create offer yet, conditions not met');
+            return;
+        }
         isCreatingOffer = true;
+        console.log('Creating offer...');
         try {
             const offer = await peerConnection.createOffer();
+            console.log('Offer created:', offer);
             await peerConnection.setLocalDescription(offer);
+            console.log('Local description set');
 
             websocket.send(
                 JSON.stringify({
@@ -557,6 +729,7 @@
                     offer: offer,
                 })
             );
+            console.log('Offer sent via WebSocket');
         } catch (error) {
             console.error('Error creating offer:', error);
         } finally {
@@ -565,11 +738,18 @@
     }
 
     async function handleOffer(offer) {
+        console.log('Handling offer...');
         try {
             await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+            console.log('Remote description (offer) set');
+            
+            // Process any queued ICE candidates now that remote description is set
+            await processQueuedIceCandidates();
 
             const answer = await peerConnection.createAnswer();
+            console.log('Answer created');
             await peerConnection.setLocalDescription(answer);
+            console.log('Local description (answer) set');
 
             websocket.send(
                 JSON.stringify({
@@ -577,14 +757,20 @@
                     answer: answer,
                 })
             );
+            console.log('Answer sent via WebSocket');
         } catch (error) {
             console.error('Error handling offer:', error);
         }
     }
 
     async function handleAnswer(answer) {
+        console.log('Handling answer...');
         try {
             await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+            console.log('Remote description (answer) set successfully');
+            
+            // Process any queued ICE candidates now that remote description is set
+            await processQueuedIceCandidates();
         } catch (error) {
             console.error('Error handling answer:', error);
         }
@@ -592,9 +778,36 @@
 
     async function handleIceCandidate(candidate) {
         try {
+            if (!peerConnection) {
+                console.log('PeerConnection not ready, queueing ICE candidate');
+                iceCandidateQueue.push(candidate);
+                return;
+            }
+            
+            // Check if remote description is set
+            if (!peerConnection.remoteDescription || !peerConnection.remoteDescription.type) {
+                console.log('Remote description not set yet, queueing ICE candidate');
+                iceCandidateQueue.push(candidate);
+                return;
+            }
+            
             await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            console.log('ICE candidate added successfully');
         } catch (error) {
             console.error('Error adding ICE candidate:', error);
+        }
+    }
+    
+    async function processQueuedIceCandidates() {
+        console.log(`Processing ${iceCandidateQueue.length} queued ICE candidates`);
+        while (iceCandidateQueue.length > 0) {
+            const candidate = iceCandidateQueue.shift();
+            try {
+                await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                console.log('Queued ICE candidate added successfully');
+            } catch (error) {
+                console.error('Error adding queued ICE candidate:', error);
+            }
         }
     }
 
@@ -626,15 +839,35 @@
         isEndingCall = true;
 
         if (websocket && websocket.readyState === WebSocket.OPEN) {
+            // Send call-ended to close both users' modals
             websocket.send(
                 JSON.stringify({
-                    type: 'leave',
+                    type: 'call-ended',
                     user_type: userType,
                     user_name: userType === 'doctor' ? 'Doctor' : 'Patient',
                 })
             );
         }
 
+        // Clean up local resources
+        cleanupCallResources();
+
+        stopOfferRetry();
+        
+        // Close popup window immediately (if opened via popup)
+        if (window.opener) {
+            window.close();
+        } else {
+            // Fallback: redirect to prior screen if not opened as popup
+            const encodedReturnTo = encodeURIComponent(returnTo || '/accounts/dashboard/');
+            window.location.href = `/medical/appointments/${appointmentId}/video-call/end/?return_to=${encodedReturnTo}`;
+        }
+    }
+    
+    function cleanupCallResources() {
+        stopRingVibration();
+        stopOfferRetry();
+        
         if (localStream) {
             localStream.getTracks().forEach((track) => track.stop());
         }
@@ -646,9 +879,20 @@
         if (websocket) {
             websocket.close();
         }
-
+    }
+    
+    function handleCallEnded() {
+        console.log('Handling call ended - closing modal for both users');
+        isEndingCall = true;
+        
+        // Clean up local resources
+        cleanupCallResources();
+        
         stopOfferRetry();
-        window.location.href = `/medical/appointments/${appointmentId}/video-call/end/`;
+        
+        // Close the modal and return to previous page
+        const encodedReturnTo = encodeURIComponent(returnTo || '/accounts/dashboard/');
+        window.location.href = `/medical/appointments/${appointmentId}/video-call/end/?return_to=${encodedReturnTo}`;
     }
 
     window.addEventListener('beforeunload', function () {

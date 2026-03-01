@@ -10,6 +10,7 @@
                 <div class="text-center sm:text-left flex-1">
                     <h1 class="text-2xl sm:text-3xl font-bold mb-2 text-gray-900">Waiting Lobby</h1>
                     <p class="text-sm sm:text-base text-gray-900">Your appointment is scheduled. Please wait for the call to begin.</p>
+                    <p class="mt-2 text-xs sm:text-sm font-medium text-amber-700">Keep this waiting lobby open to receive doctor call popups instantly.</p>
                 </div>
                 <div class="flex flex-col sm:flex-row gap-3">
                     <a href="{% url 'medical:test_devices' %}" 
@@ -41,10 +42,7 @@
                 <div>
                     <p class="text-xs sm:text-sm text-gray-600 font-medium">Scheduled Date & Time</p>
                     <p class="text-base sm:text-lg font-medium text-gray-900 mt-1">{{ appointment.appointment_date|date:"F d, Y" }}</p>
-                    <input type="datetime-local" 
-                           value="{{ appointment.appointment_date|date:'Y-m-d\TH:i' }}" 
-                           onchange="updateAppointmentTime({{ appointment.id }}, this.value)"
-                           class="text-xs text-gray-700 border border-gray-300 rounded px-2 py-1 mt-1">
+                    <p class="text-xs text-gray-700 border border-gray-300 rounded px-2 py-1 mt-1 bg-gray-100">{{ appointment.appointment_date|date:"h:i A" }}</p>
                 </div>
             </div>
         </div>
@@ -122,6 +120,8 @@
         </div>
     </div>
 </div>
+
+{% include 'medical/partials/incoming_call_overlay.html' %}
 
 <script>
     let timeRemaining = {{ time_until_appointment }};

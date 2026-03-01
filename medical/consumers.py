@@ -14,6 +14,8 @@ class VideoCallConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.room_id = self.scope['url_route']['kwargs']['room_id']
         self.room_group_name = f'video_call_{self.room_id}'
+        self.peer_id = str(uuid.uuid4())
+        self.user_type = None  # Will be set when user sends join message
         
         # Join room group
         await self.channel_layer.group_add(
@@ -23,15 +25,8 @@ class VideoCallConsumer(AsyncWebsocketConsumer):
         
         await self.accept()
         
-        # Notify others that a new peer joined
-        await self.channel_layer.group_send(
-            self.room_group_name,
-            {
-                'type': 'peer_joined',
-                'peer_id': str(uuid.uuid4()),
-                'message': 'A new peer has joined the room'
-            }
-        )
+        # Don't send peer_joined here - wait for user to send join message
+        # This ensures we know their user_type before notifying others
     
     async def disconnect(self, close_code):
         # Leave room group
@@ -50,8 +45,10 @@ class VideoCallConsumer(AsyncWebsocketConsumer):
         )
     
     async def receive(self, text_data):
+        print(f"[VideoCall] Received message in room {self.room_id}: {text_data}")
         data = json.loads(text_data)
         message_type = data.get('type')
+        print(f"[VideoCall] Message type: {message_type}, from channel: {self.channel_name}")
         
         if message_type == 'offer':
             # Broadcast offer to all other peers in the room
@@ -87,13 +84,28 @@ class VideoCallConsumer(AsyncWebsocketConsumer):
             )
         
         elif message_type == 'join':
-            # Handle join message
+            # Store user type
+            self.user_type = data.get('user_type')
+            
+            # Send peer_joined first (generic notification)
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'peer_joined',
+                    'peer_id': self.peer_id,
+                    'sender': self.channel_name,
+                    'message': 'A new peer has joined the room'
+                }
+            )
+            
+            # Then send user_joined with specific user_type info - notify OTHERS only
             await self.channel_layer.group_send(
                 self.room_group_name,
                 {
                     'type': 'user_joined',
                     'user_type': data.get('user_type'),  # 'doctor' or 'patient'
                     'user_name': data.get('user_name'),
+                    'sender': self.channel_name,
                 }
             )
         
@@ -105,6 +117,19 @@ class VideoCallConsumer(AsyncWebsocketConsumer):
                     'type': 'user_left',
                     'user_type': data.get('user_type'),
                     'user_name': data.get('user_name'),
+                    'sender': self.channel_name,
+                }
+            )
+        
+        elif message_type == 'call-ended':
+            # Handle call ended - notify all users to close their modals
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'call_ended',
+                    'user_type': data.get('user_type'),
+                    'user_name': data.get('user_name'),
+                    'sender': self.channel_name,
                 }
             )
         
@@ -135,10 +160,13 @@ class VideoCallConsumer(AsyncWebsocketConsumer):
     async def webrtc_offer(self, event):
         # Don't send back to the sender
         if event['sender'] != self.channel_name:
+            print(f"[VideoCall] Sending offer to {self.channel_name}")
             await self.send(text_data=json.dumps({
                 'type': 'offer',
                 'offer': event['offer'],
             }))
+        else:
+            print(f"[VideoCall] Skipping offer for sender {self.channel_name}")
     
     async def webrtc_answer(self, event):
         # Don't send back to the sender
@@ -157,11 +185,16 @@ class VideoCallConsumer(AsyncWebsocketConsumer):
             }))
     
     async def peer_joined(self, event):
-        await self.send(text_data=json.dumps({
-            'type': 'peer-joined',
-            'peer_id': event.get('peer_id'),
-            'message': event.get('message'),
-        }))
+        # Don't send back to the sender
+        if event.get('sender') != self.channel_name:
+            print(f"[VideoCall] Sending peer_joined to {self.channel_name}")
+            await self.send(text_data=json.dumps({
+                'type': 'peer-joined',
+                'peer_id': event.get('peer_id'),
+                'message': event.get('message'),
+            }))
+        else:
+            print(f"[VideoCall] Skipping peer_joined for sender {self.channel_name}")
     
     async def peer_left(self, event):
         await self.send(text_data=json.dumps({
@@ -170,15 +203,30 @@ class VideoCallConsumer(AsyncWebsocketConsumer):
         }))
     
     async def user_joined(self, event):
-        await self.send(text_data=json.dumps({
-            'type': 'user-joined',
-            'user_type': event.get('user_type'),
-            'user_name': event.get('user_name'),
-        }))
+        # Don't send back to the sender
+        if event.get('sender') != self.channel_name:
+            print(f"[VideoCall] Sending user_joined ({event.get('user_type')}) to {self.channel_name}")
+            await self.send(text_data=json.dumps({
+                'type': 'user-joined',
+                'user_type': event.get('user_type'),
+                'user_name': event.get('user_name'),
+            }))
+        else:
+            print(f"[VideoCall] Skipping user_joined for sender {self.channel_name}")
     
     async def user_left(self, event):
+        # Don't send back to the sender
+        if event.get('sender') != self.channel_name:
+            await self.send(text_data=json.dumps({
+                'type': 'user-left',
+                'user_type': event.get('user_type'),
+                'user_name': event.get('user_name'),
+            }))
+    
+    async def call_ended(self, event):
+        # Send to ALL users including sender so both modals close
         await self.send(text_data=json.dumps({
-            'type': 'user-left',
+            'type': 'call-ended',
             'user_type': event.get('user_type'),
             'user_name': event.get('user_name'),
         }))
@@ -198,6 +246,98 @@ class VideoCallConsumer(AsyncWebsocketConsumer):
                 'type': 'screen-share',
                 'is_sharing': event.get('is_sharing'),
             }))
+
+
+class CallInviteConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        user = self.scope.get('user')
+        if not user or user.is_anonymous:
+            await self.close(code=4001)
+            return
+
+        self.user = user
+        self.appointment_id = int(self.scope['url_route']['kwargs']['appointment_id'])
+        self.room_group_name = f'call_invite_{self.appointment_id}'
+
+        appointment = await self.get_appointment(self.appointment_id)
+        if not appointment:
+            await self.close(code=4004)
+            return
+
+        if self.user.id not in {appointment.patient_id, appointment.doctor_id}:
+            await self.close(code=4003)
+            return
+
+        self.appointment = appointment
+        self.is_doctor = self.user.id == appointment.doctor_id
+        self.is_patient = self.user.id == appointment.patient_id
+
+        await self.channel_layer.group_add(self.room_group_name, self.channel_name)
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        if hasattr(self, 'room_group_name'):
+            await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
+
+    async def receive(self, text_data):
+        try:
+            data = json.loads(text_data)
+        except json.JSONDecodeError:
+            await self.send(text_data=json.dumps({
+                'type': 'error',
+                'message': 'Invalid payload.',
+            }))
+            return
+
+        message_type = data.get('type')
+        if message_type not in {
+            'call_invite',
+            'call_accepted',
+            'call_declined',
+            'call_cancelled',
+            'call_ended',
+        }:
+            return
+
+        if message_type == 'call_invite' and not self.is_doctor:
+            return
+
+        if message_type in {'call_accepted', 'call_declined'} and not self.is_patient:
+            return
+
+        room_id = data.get('room_id') or self.appointment.video_call_room_id
+        payload = {
+            'type': message_type,
+            'appointment_id': self.appointment_id,
+            'room_id': room_id,
+            'sender_id': self.user.id,
+            'sender_role': 'doctor' if self.is_doctor else 'patient',
+            'sender_name': self.get_user_display_name(),
+            'timestamp': timezone.now().isoformat(),
+        }
+
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                'type': 'call_event',
+                'sender_channel': self.channel_name,
+                'payload': payload,
+            }
+        )
+
+    async def call_event(self, event):
+        if event.get('sender_channel') == self.channel_name:
+            return
+
+        await self.send(text_data=json.dumps(event.get('payload', {})))
+
+    def get_user_display_name(self):
+        full_name = f'{self.user.first_name} {self.user.last_name}'.strip()
+        return full_name or self.user.username or self.user.email
+
+    @database_sync_to_async
+    def get_appointment(self, appointment_id):
+        return Appointment.objects.filter(id=appointment_id).first()
 
 
 class ChatConsumer(AsyncWebsocketConsumer):

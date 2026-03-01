@@ -6,18 +6,51 @@ from django.db.models import Q
 from django.contrib.auth import get_user_model
 from django.http import JsonResponse
 from django.conf import settings
+from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.dateparse import parse_datetime
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from datetime import datetime
+from urllib.parse import quote, urlparse
 import os
 import json
 import uuid
-from .models import Hospital, DoctorProfile, PatientProfile, Appointment, Availability, ChatMessage
+from .models import Hospital, DoctorProfile, PatientProfile, Appointment, Availability, ChatMessage, Notification
+from accounts.decorators import never_cache
 
 User = get_user_model()
 MAX_CHAT_ATTACHMENT_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
+def _allowed_return_paths(appointment):
+    return {
+        reverse('accounts:dashboard'),
+        reverse('medical:chat', args=[appointment.id]),
+        reverse('medical:patient_chatbox', args=[appointment.id]),
+        reverse('medical:doctor_chatbox', args=[appointment.id]),
+        reverse('medical:waiting_lobby', args=[appointment.id]),
+    }
+
+
+def _safe_return_to(request, appointment, default_path):
+    raw_target = (
+        request.GET.get('return_to')
+        or request.POST.get('return_to')
+        or default_path
+    )
+
+    parsed = urlparse(raw_target)
+    if parsed.netloc and parsed.netloc != request.get_host():
+        return default_path
+
+    target_path = parsed.path if parsed.path else raw_target
+    if target_path not in _allowed_return_paths(appointment):
+        return default_path
+
+    if parsed.query:
+        return f'{target_path}?{parsed.query}'
+    return target_path
 
 
 def _serialize_chat_message(message, current_user):
@@ -45,12 +78,14 @@ def _serialize_chat_message(message, current_user):
     }
 
 
+@never_cache
 @login_required
 def hospital_list(request):
     hospitals = Hospital.objects.all()
     return render(request, 'medical/hospital_list.html', {'hospitals': hospitals})
 
 
+@never_cache
 @login_required
 def hospital_detail(request, hospital_id):
     hospital = get_object_or_404(Hospital, id=hospital_id)
@@ -58,6 +93,7 @@ def hospital_detail(request, hospital_id):
     return render(request, 'medical/hospital_detail.html', {'hospital': hospital, 'doctors': doctors})
 
 
+@never_cache
 @login_required
 def doctor_list(request):
     # Filter doctors by patient's hospital if user is a patient
@@ -72,6 +108,7 @@ def doctor_list(request):
     return render(request, 'medical/doctor_list.html', {'doctors': doctors})
 
 
+@never_cache
 @login_required
 def doctor_detail(request, doctor_id):
     doctor = get_object_or_404(DoctorProfile.objects.select_related('user', 'hospital'), id=doctor_id)
@@ -98,6 +135,7 @@ def doctor_detail(request, doctor_id):
     })
 
 
+@never_cache
 @login_required
 def patient_list(request):
     if not request.user.is_doctor and not request.user.is_admin_user:
@@ -108,6 +146,7 @@ def patient_list(request):
     return render(request, 'medical/patient_list.html', {'patients': patients})
 
 
+@never_cache
 @login_required
 def patient_detail(request, patient_id):
     if not request.user.is_doctor and not request.user.is_admin_user:
@@ -127,6 +166,7 @@ def patient_detail(request, patient_id):
     })
 
 
+@never_cache
 @login_required
 def appointment_list(request):
     user = request.user
@@ -147,6 +187,7 @@ def appointment_list(request):
     return render(request, 'medical/appointment_list.html', {'appointments': appointments})
 
 
+@never_cache
 @login_required
 def appointment_detail(request, appointment_id):
     appointment = get_object_or_404(
@@ -163,6 +204,7 @@ def appointment_detail(request, appointment_id):
     return render(request, 'medical/appointment_detail.html', {'appointment': appointment})
 
 
+@never_cache
 @login_required
 def create_appointment(request):
     if not request.user.is_patient:
@@ -216,6 +258,7 @@ def create_appointment(request):
     })
 
 
+@never_cache
 @login_required
 def update_appointment_status(request, appointment_id):
     appointment = get_object_or_404(Appointment, id=appointment_id)
@@ -239,6 +282,7 @@ def update_appointment_status(request, appointment_id):
     return redirect('medical:appointment_detail', appointment_id=appointment.id)
 
 
+@never_cache
 @login_required
 def cancel_appointment(request, appointment_id):
     appointment = get_object_or_404(Appointment, id=appointment_id)
@@ -263,6 +307,7 @@ def cancel_appointment(request, appointment_id):
     return redirect('medical:appointment_detail', appointment_id=appointment.id)
 
 
+@never_cache
 @login_required
 def chat_view(request, appointment_id):
     appointment = get_object_or_404(
@@ -301,6 +346,7 @@ def chat_view(request, appointment_id):
     })
 
 
+@never_cache
 @login_required
 def doctor_chatbox(request, appointment_id):
     """Dedicated chatbox for doctor"""
@@ -316,6 +362,7 @@ def doctor_chatbox(request, appointment_id):
     return render(request, 'medical/doctor_chatbox.html', {'appointment': appointment})
 
 
+@never_cache
 @login_required
 def patient_chatbox(request, appointment_id):
     """Dedicated chatbox for patient"""
@@ -331,6 +378,7 @@ def patient_chatbox(request, appointment_id):
     return render(request, 'medical/patient_chatbox.html', {'appointment': appointment})
 
 
+@never_cache
 @login_required
 def send_message(request, appointment_id):
     if request.method != 'POST':
@@ -376,6 +424,7 @@ def send_message(request, appointment_id):
     return JsonResponse(response_payload)
 
 
+@never_cache
 @login_required
 def get_chat_messages(request, appointment_id):
     """Get chat messages for an appointment (AJAX endpoint)"""
@@ -415,6 +464,7 @@ def get_chat_messages(request, appointment_id):
 
 # ==================== VIDEO CALL VIEWS ====================
 
+@never_cache
 @login_required
 def video_call_view(request, appointment_id):
     """Main video call page for doctor or patient"""
@@ -425,11 +475,25 @@ def video_call_view(request, appointment_id):
     
     user = request.user
     
+    # Debug logging
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"Video call view - User: {user.id} ({user.email}), Role: {user.role}")
+    logger.info(f"Appointment doctor: {appointment.doctor.id} ({appointment.doctor.email})")
+    logger.info(f"Appointment patient: {appointment.patient.id} ({appointment.patient.email})")
+    logger.info(f"Is doctor: {user == appointment.doctor}, Is patient: {user == appointment.patient}")
+    
     if not (user == appointment.patient or user == appointment.doctor):
         messages.error(request, "You don't have permission to join this video call.")
         return redirect('accounts:dashboard')
     
-    user_type = 'doctor' if user == appointment.doctor else 'patient'
+    # Determine user type - check by role as backup
+    if user == appointment.doctor or user.role == 'doctor':
+        user_type = 'doctor'
+    else:
+        user_type = 'patient'
+    
+    logger.info(f"Determined user_type: {user_type}")
 
     # Ensure both participants can join the same room even if patient joins first.
     if not appointment.video_call_room_id:
@@ -438,6 +502,13 @@ def video_call_view(request, appointment_id):
     
     if user_type == 'doctor' and appointment.video_call_status == 'waiting':
         appointment.start_video_call()
+
+    default_return = (
+        reverse('medical:doctor_chatbox', args=[appointment.id])
+        if user_type == 'doctor'
+        else reverse('medical:patient_chatbox', args=[appointment.id])
+    )
+    return_to = _safe_return_to(request, appointment, default_return)
     
     webrtc_config = {
         'stun_servers': settings.WEBRTC_STUN_SERVERS,
@@ -448,48 +519,117 @@ def video_call_view(request, appointment_id):
         'appointment': appointment,
         'user_type': user_type,
         'room_id': appointment.video_call_room_id,
+        'return_to': return_to,
         'webrtc_config': json.dumps(webrtc_config),
     })
 
 
+@never_cache
 @login_required
 def start_video_call(request, appointment_id):
     """Doctor initiates video call"""
-    appointment = get_object_or_404(Appointment, id=appointment_id)
+    appointment = get_object_or_404(
+        Appointment.objects.select_related('doctor', 'patient'),
+        id=appointment_id
+    )
     user = request.user
+    is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
     
     if user != appointment.doctor:
         messages.error(request, "Only the doctor can start the video call.")
+        if is_ajax:
+            return JsonResponse({'success': False, 'error': 'Only the doctor can start the video call.'}, status=403)
         return redirect('medical:doctor_chatbox', appointment_id=appointment.id)
     
     if not appointment.video_call_room_id:
         appointment.generate_room_id()
-        appointment.save()
     
     appointment.video_call_status = 'waiting'
+    appointment.video_call_started_at = None
+    appointment.video_call_ended_at = None
+    appointment.call_duration = 0
     appointment.save()
-    
-    return redirect(f'/medical/appointments/{appointment.id}/video-call/')
+
+    channel_layer = get_channel_layer()
+    if channel_layer:
+        async_to_sync(channel_layer.group_send)(
+            f'call_invite_{appointment.id}',
+            {
+                'type': 'call_event',
+                'sender_channel': '',
+                'payload': {
+                    'type': 'call_invite',
+                    'appointment_id': appointment.id,
+                    'room_id': appointment.video_call_room_id,
+                    'sender_id': user.id,
+                    'sender_role': 'doctor',
+                    'sender_name': f'{user.first_name} {user.last_name}'.strip() or user.email,
+                    'timestamp': timezone.now().isoformat(),
+                }
+            }
+        )
+
+    default_return = reverse('medical:doctor_chatbox', args=[appointment.id])
+    return_to = _safe_return_to(request, appointment, default_return)
+    video_call_url = f"{reverse('medical:video_call', args=[appointment.id])}?return_to={quote(return_to, safe='')}"
+
+    if is_ajax:
+        return JsonResponse({
+            'success': True,
+            'appointment_id': appointment.id,
+            'room_id': appointment.video_call_room_id,
+            'video_call_url': video_call_url,
+            'return_to': return_to,
+        })
+
+    return redirect(video_call_url)
 
 
+@never_cache
 @login_required
 def join_video_call(request, appointment_id):
     """Patient joins video call"""
-    appointment = get_object_or_404(Appointment, id=appointment_id)
+    appointment = get_object_or_404(
+        Appointment.objects.select_related('doctor', 'patient'),
+        id=appointment_id
+    )
     user = request.user
+    is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
     
     if user != appointment.patient:
         messages.error(request, "Invalid access.")
+        if is_ajax:
+            return JsonResponse({'success': False, 'error': 'Invalid access.'}, status=403)
         return redirect('accounts:dashboard')
 
-    # Patient can enter the call screen anytime and wait for doctor.
+    waiting_lobby_url = reverse('medical:waiting_lobby', args=[appointment.id])
+    if appointment.video_call_status not in {'waiting', 'in_progress'}:
+        message = 'Doctor has not started the call yet. Please wait in the waiting lobby or chat.'
+        if is_ajax:
+            return JsonResponse({'success': False, 'error': message}, status=400)
+        messages.warning(request, message)
+        return redirect(waiting_lobby_url)
+
     if not appointment.video_call_room_id:
         appointment.generate_room_id()
         appointment.save()
 
-    return redirect(f'/medical/appointments/{appointment.id}/video-call/')
+    return_to = _safe_return_to(request, appointment, waiting_lobby_url)
+    video_call_url = f"{reverse('medical:video_call', args=[appointment.id])}?return_to={quote(return_to, safe='')}"
+
+    if is_ajax:
+        return JsonResponse({
+            'success': True,
+            'appointment_id': appointment.id,
+            'room_id': appointment.video_call_room_id,
+            'video_call_url': video_call_url,
+            'return_to': return_to,
+        })
+
+    return redirect(video_call_url)
 
 
+@never_cache
 @login_required
 def end_video_call(request, appointment_id):
     """End video call - can be called by either doctor or patient"""
@@ -505,19 +645,42 @@ def end_video_call(request, appointment_id):
         messages.success(request, "Video call ended.")
     else:
         messages.info(request, "Video call was already ended.")
-    
-    if user == appointment.doctor:
-        return redirect('medical:doctor_chatbox', appointment_id=appointment.id)
-    else:
-        return redirect('medical:patient_chatbox', appointment_id=appointment.id)
+
+    channel_layer = get_channel_layer()
+    if channel_layer:
+        async_to_sync(channel_layer.group_send)(
+            f'call_invite_{appointment.id}',
+            {
+                'type': 'call_event',
+                'sender_channel': '',
+                'payload': {
+                    'type': 'call_ended',
+                    'appointment_id': appointment.id,
+                    'sender_id': user.id,
+                    'sender_role': 'doctor' if user == appointment.doctor else 'patient',
+                    'sender_name': f'{user.first_name} {user.last_name}'.strip() or user.email,
+                    'timestamp': timezone.now().isoformat(),
+                }
+            }
+        )
+
+    default_return = (
+        reverse('medical:doctor_chatbox', args=[appointment.id])
+        if user == appointment.doctor
+        else reverse('medical:patient_chatbox', args=[appointment.id])
+    )
+    return_to = _safe_return_to(request, appointment, default_return)
+    return redirect(return_to)
 
 
+@never_cache
 @login_required
 def test_devices(request):
     """Pre-call camera and microphone test page"""
     return render(request, 'medical/video_call_test.html')
 
 
+@never_cache
 @login_required
 def get_video_call_status(request, appointment_id):
     """AJAX endpoint to get current video call status"""
@@ -535,6 +698,7 @@ def get_video_call_status(request, appointment_id):
     })
 
 
+@never_cache
 @login_required
 def waiting_lobby(request, appointment_id):
     """
@@ -552,8 +716,8 @@ def waiting_lobby(request, appointment_id):
         messages.error(request, 'You do not have permission to access this waiting lobby.')
         return redirect('accounts:dashboard')
     
-    # Check if appointment is scheduled or confirmed
-    if appointment.status not in ['scheduled', 'confirmed']:
+    # Check if appointment is scheduled, confirmed, or rescheduled
+    if appointment.status not in ['scheduled', 'confirmed', 'rescheduled']:
         messages.warning(request, 'This appointment is not scheduled.')
         return redirect('accounts:dashboard')
     
@@ -570,6 +734,7 @@ def waiting_lobby(request, appointment_id):
     return render(request, template, context)
 
 
+@never_cache
 @login_required
 def doctor_patients(request):
     """View list of patients assigned to the doctor"""
@@ -583,20 +748,21 @@ def doctor_patients(request):
         patient_appointments__doctor=request.user,
         patient_appointments__status='completed'
     ).distinct().select_related('patient_profile')
-    
+
     return render(request, 'medical/doctor_patients.html', {'patients': patients})
 
 
+@never_cache
 @login_required
 def update_appointment_time(request, appointment_id):
-    """Update appointment time for testing purposes"""
+    """Update appointment time from waiting lobby"""
     if request.method != 'POST':
         return JsonResponse({'error': 'Only POST allowed'}, status=405)
     
     appointment = get_object_or_404(Appointment, id=appointment_id)
     
-    # Check permissions
-    if not (request.user == appointment.patient or request.user == appointment.doctor or request.user.is_admin_user):
+    # Check permissions - only doctor can reschedule
+    if request.user != appointment.doctor:
         return JsonResponse({'error': 'Permission denied'}, status=403)
     
     try:
@@ -613,8 +779,22 @@ def update_appointment_time(request, appointment_id):
         if timezone.is_naive(new_time):
             new_time = timezone.make_aware(new_time)
         
+        # Store old date for notification
+        old_date = appointment.appointment_date
+        
+        # Update appointment
         appointment.appointment_date = new_time
+        appointment.status = 'rescheduled'
         appointment.save()
+        
+        # Create notification for patient
+        Notification.objects.create(
+            recipient=appointment.patient,
+            notification_type='appointment_rescheduled',
+            title='Appointment Rescheduled',
+            message=f'Your appointment has been rescheduled from {old_date.strftime("%B %d, %Y at %I:%M %p")} to {new_time.strftime("%B %d, %Y at %I:%M %p")}.',
+            appointment=appointment
+        )
         
         return JsonResponse({
             'success': True,

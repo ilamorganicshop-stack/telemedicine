@@ -8,6 +8,7 @@ urlpatterns = [
     path('logout/', views.logout_view, name='logout'),
     path('signup/', views.SignUpView.as_view(), name='signup'),
     path('dashboard/', views.dashboard_view, name='dashboard'),
+    path('notifications/clear/', views.clear_notifications, name='clear_notifications'),
     
     # Super Admin URLs
     path('super-admin/dashboard/', views.super_admin_dashboard, name='super_admin_dashboard'),

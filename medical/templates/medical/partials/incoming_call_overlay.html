@@ -1,0 +1,190 @@
+<div id="incoming-call-overlay" class="fixed inset-0 z-[100] hidden" aria-live="polite">
+    <div class="absolute inset-0 bg-black/90"></div>
+    <div class="relative flex h-full w-full flex-col items-center justify-center px-6 text-center text-white">
+        <p class="text-sm uppercase tracking-[0.3em] text-slate-300">Incoming Call</p>
+        <h2 id="incoming-call-caller" class="mt-3 text-3xl font-semibold sm:text-4xl">Doctor is calling</h2>
+        <p class="mt-2 max-w-md text-sm text-slate-300 sm:text-base">
+            Please answer here. For a reliable connection, keep waiting lobby or chat open before calls.
+        </p>
+
+        <div class="absolute bottom-16 flex w-full max-w-sm items-center justify-between px-8 sm:bottom-20">
+            <button
+                id="incoming-call-decline"
+                type="button"
+                class="flex h-16 w-16 items-center justify-center rounded-full bg-red-500 text-white shadow-lg transition hover:bg-red-600"
+                aria-label="Decline incoming call">
+                <svg class="h-8 w-8" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M12 9c-4.54 0-8.66 1.78-11.71 4.67a1 1 0 0 0 0 1.42l2.48 2.48a1 1 0 0 0 1.41 0c.79-.74 1.68-1.36 2.66-1.85a1 1 0 0 0 .56-.9v-2.1a15.3 15.3 0 0 1 9.2 0v2.1a1 1 0 0 0 .56.9c.98.49 1.88 1.11 2.67 1.85a1 1 0 0 0 1.4 0l2.48-2.48a1 1 0 0 0 0-1.42C20.66 10.78 16.54 9 12 9Z"/>
+                </svg>
+            </button>
+            <button
+                id="incoming-call-answer"
+                type="button"
+                class="flex h-16 w-16 items-center justify-center rounded-full bg-green-500 text-white shadow-lg transition hover:bg-green-600"
+                aria-label="Answer incoming call">
+                <svg class="h-8 w-8" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M7.62 10.79a15.9 15.9 0 0 0 5.59 5.59l1.86-1.86a1 1 0 0 1 1.03-.24 11.36 11.36 0 0 0 3.57.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C10.61 21 3 13.39 3 4a1 1 0 0 1 1-1h3.4a1 1 0 0 1 1 1 11.36 11.36 0 0 0 .57 3.57 1 1 0 0 1-.24 1.03l-1.11 1.19Z"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        const overlay = document.getElementById('incoming-call-overlay');
+        const callerName = document.getElementById('incoming-call-caller');
+        const answerBtn = document.getElementById('incoming-call-answer');
+        const declineBtn = document.getElementById('incoming-call-decline');
+        if (!overlay || !callerName || !answerBtn || !declineBtn) {
+            return;
+        }
+
+        const appointmentId = '{{ appointment.id }}';
+        const videoCallUrl = '{% url "medical:video_call" appointment.id %}?return_to=' + encodeURIComponent(window.location.pathname + window.location.search);
+        const wsScheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+        const socketUrl = `${wsScheme}://${window.location.host}/ws/call-invite/${appointmentId}/`;
+
+        let callSocket = null;
+        let reconnectTimer = null;
+        let activeInvite = null;
+        let vibrationTimer = null;
+        let vibrationTimeoutTimer = null;
+        let vibrationPulseCount = 0;
+        const MAX_VIBRATION_PULSES = 120; // 60 seconds at 500ms interval = 120 pulses
+
+        function startVibration() {
+            if (!navigator.vibrate) return;
+            
+            // Stop any existing vibration first
+            stopVibration();
+            vibrationPulseCount = 0;
+            
+            // Continuous vibration pattern: 200ms vibrate, 100ms pause
+            vibrationTimer = setInterval(() => {
+                vibrationPulseCount++;
+                if (vibrationPulseCount > MAX_VIBRATION_PULSES) {
+                    stopVibration();
+                    return;
+                }
+                navigator.vibrate([200, 100, 200]);
+            }, 500);
+
+            // Auto-stop after 60 seconds
+            vibrationTimeoutTimer = setTimeout(() => {
+                stopVibration();
+            }, 60000);
+        }
+
+        function stopVibration() {
+            if (vibrationTimer !== null) {
+                clearInterval(vibrationTimer);
+                vibrationTimer = null;
+            }
+            if (vibrationTimeoutTimer !== null) {
+                clearTimeout(vibrationTimeoutTimer);
+                vibrationTimeoutTimer = null;
+            }
+            vibrationPulseCount = 0;
+            if (navigator.vibrate) {
+                navigator.vibrate(0); // Stop any ongoing vibration
+            }
+        }
+
+        function showIncomingCall(invitePayload) {
+            // Only show if not already showing
+            if (activeInvite) return;
+            
+            // Don't show incoming call if already in video call (modal visible)
+            const videoModal = document.getElementById('video-call-modal');
+            if (videoModal && !videoModal.classList.contains('hidden')) {
+                return;
+            }
+            
+            activeInvite = invitePayload;
+            callerName.textContent = invitePayload.sender_name
+                ? `${invitePayload.sender_name} is calling`
+                : 'Doctor is calling';
+            overlay.classList.remove('hidden');
+            startVibration();
+        }
+
+        function hideIncomingCall() {
+            overlay.classList.add('hidden');
+            activeInvite = null;
+            stopVibration();
+        }
+
+        function sendCallSignal(type) {
+            if (!activeInvite || !callSocket || callSocket.readyState !== WebSocket.OPEN) {
+                return;
+            }
+            callSocket.send(JSON.stringify({
+                type: type,
+                room_id: activeInvite.room_id,
+            }));
+        }
+
+        function connectCallSocket() {
+            callSocket = new WebSocket(socketUrl);
+
+            callSocket.onmessage = function (event) {
+                let data = null;
+                try {
+                    data = JSON.parse(event.data);
+                } catch (error) {
+                    return;
+                }
+
+                if (data.type === 'call_invite' && data.sender_role === 'doctor') {
+                    showIncomingCall(data);
+                }
+
+                if (data.type === 'call_cancelled' || data.type === 'call_ended') {
+                    hideIncomingCall();
+                }
+
+                if ((data.type === 'call_accepted' || data.type === 'call_declined') && data.sender_role === 'patient') {
+                    hideIncomingCall();
+                }
+            };
+
+            callSocket.onclose = function () {
+                if (!reconnectTimer) {
+                    reconnectTimer = setTimeout(function () {
+                        reconnectTimer = null;
+                        connectCallSocket();
+                    }, 2500);
+                }
+            };
+        }
+
+        answerBtn.addEventListener('click', function () {
+            if (!activeInvite) return;
+            stopVibration(); // Stop vibration immediately
+            sendCallSignal('call_accepted');
+            
+            // Hide incoming call overlay
+            hideIncomingCall();
+            
+            // Open video call in popup (faster than redirect)
+            window.open(videoCallUrl, 'videoCall', 'width=1200,height=800,resizable=yes,scrollbars=no');
+        });
+
+        declineBtn.addEventListener('click', function () {
+            sendCallSignal('call_declined');
+            hideIncomingCall();
+        });
+
+        window.addEventListener('beforeunload', function () {
+            if (reconnectTimer) {
+                clearTimeout(reconnectTimer);
+            }
+            if (callSocket) {
+                callSocket.close();
+            }
+        });
+
+        connectCallSocket();
+    })();
+</script>

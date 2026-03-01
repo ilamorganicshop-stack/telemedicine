@@ -65,9 +65,51 @@
     </div>
 </div>
 
+<!-- Notifications Section -->
+{% if notifications %}
+<div class="bg-blue-50 border border-blue-200 rounded-lg p-5 mb-8">
+    <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2">
+            <svg class="w-5 h-5 text-blue-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+            </svg>
+            <h3 class="text-lg font-semibold text-blue-900">Recent Notifications</h3>
+            {% if unread_notifications_count > 0 %}
+            <span class="px-2.5 py-0.5 bg-red-500 text-white rounded-full text-xs font-bold">{{ unread_notifications_count }} New</span>
+            {% endif %}
+        </div>
+        <form method="post" action="{% url 'accounts:clear_notifications' %}" class="ml-4">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <button type="submit" class="rounded-md hover:bg-blue-100 transition-colors p-2" title="Clear all notifications">
+                <svg class="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M9 3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1h4a1 1 0 0 1 0 2h-1.069l-.867 14.142A2 2 0 0 1 16.137 21H7.863a2 2 0 0 1-1.995-1.858L5.07 6H4a1 1 0 0 1 0-2h4V3Zm2 5a1 1 0 0 0-1 1v6a1 1 0 1 0 2 0v-6a1 1 0 0 0-1-1Zm4 0a1 1 0 0 0-1 1v6a1 1 0 1 0 2 0v-6a1 1 0 0 0-1-1Z"/>
+                </svg>
+            </button>
+        </form>
+    </div>
+    <div class="space-y-3">
+        {% for notification in notifications %}
+        <div class="bg-white border-l-4 {% if notification.notification_type == 'appointment_approved' %}border-green-500{% elif notification.notification_type == 'appointment_rescheduled' %}border-yellow-500{% else %}border-red-500{% endif %} rounded-r-lg p-4 shadow-sm">
+            <div class="flex items-start justify-between">
+                <div class="flex-1">
+                    <p class="font-semibold text-gray-900">{{ notification.title }}</p>
+                    <p class="mt-1 text-sm text-gray-600">{{ notification.message }}</p>
+                    <p class="mt-2 text-xs text-gray-500">{{ notification.created_at|timesince }} ago</p>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
 <div class="bg-white shadow rounded-lg">
     <div class="px-4 py-5 sm:p-6">
         <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Upcoming Appointments</h3>
+        <p class="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs sm:text-sm text-amber-800">
+            Call tip: stay in the appointment waiting lobby or patient chatbox around appointment time so incoming doctor calls appear immediately.
+        </p>
         {% if upcoming_appointments %}
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200">
@@ -88,14 +130,12 @@
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <div class="text-sm text-gray-900">{{ appointment.appointment_date|date:"M d, Y" }}</div>
-                            <input type="datetime-local" 
-                                   value="{{ appointment.appointment_date|date:'Y-m-d\TH:i' }}" 
-                                   onchange="updateAppointmentTime({{ appointment.id }}, this.value)"
-                                   class="text-xs text-gray-700 border border-gray-300 rounded px-2 py-1 mt-1">
+                            <div class="text-xs text-gray-700 border border-gray-300 rounded px-2 py-1 mt-1 bg-gray-100">{{ appointment.appointment_date|time:"h:i A" }}</div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
                                 {% if appointment.status == 'scheduled' %}bg-green-100 text-green-800
+                                {% elif appointment.status == 'rescheduled' %}bg-purple-100 text-purple-800
                                 {% elif appointment.status == 'confirmed' %}bg-blue-100 text-blue-800
                                 {% elif appointment.status == 'requested' %}bg-yellow-100 text-yellow-800
                                 {% else %}bg-gray-100 text-gray-800{% endif %}">
@@ -103,7 +143,7 @@
                             </span>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            {% if appointment.status == 'scheduled' or appointment.status == 'confirmed' %}
+                            {% if appointment.status == 'scheduled' or appointment.status == 'confirmed' or appointment.status == 'rescheduled' %}
                             <a href="{% url 'medical:waiting_lobby' appointment.id %}" 
                                class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors">
                                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -170,34 +210,6 @@
 {% endif %}
 
 <script>
-function updateAppointmentTime(appointmentId, newTime) {
-    if (!confirm('Update appointment time to ' + new Date(newTime).toLocaleString() + '?')) {
-        location.reload();
-        return;
-    }
-    
-    fetch(`/medical/appointments/${appointmentId}/update-time/`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': '{{ csrf_token }}'
-        },
-        body: JSON.stringify({ appointment_date: newTime })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert('Appointment time updated successfully!');
-            location.reload();
-        } else {
-            alert('Error: ' + (data.error || 'Failed to update'));
-            location.reload();
-        }
-    })
-    .catch(error => {
-        alert('Error updating appointment time');
-        location.reload();
-    });
-}
+// Appointment date changes are no longer allowed to be made by patients
 </script>
 {% endblock %}

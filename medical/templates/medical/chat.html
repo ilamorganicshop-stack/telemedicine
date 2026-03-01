@@ -56,12 +56,9 @@
                 {% else %}
                     <!-- Patient view -->
                     {% if appointment.video_call_status == 'waiting' or appointment.video_call_status == 'in_progress' %}
-                        <a href="{% url 'medical:join_video_call' appointment.id %}" class="bg-green-500 text-white px-6 py-3 rounded-lg hover:bg-green-600 flex items-center gap-2">
-                            <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
-                            </svg>
-                            Join Video Call
-                        </a>
+                        <div class="bg-amber-50 text-amber-800 px-6 py-3 rounded-lg border border-amber-300 text-sm">
+                            Doctor has started the call. Please wait in Waiting Lobby or Patient Chat to receive incoming call popup.
+                        </div>
                     {% elif appointment.video_call_status == 'not_started' %}
                         <div class="bg-gray-100 px-6 py-3 rounded-lg text-gray-600 flex items-center gap-2">
                             <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">

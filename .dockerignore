@@ -3,9 +3,13 @@
 .gitignore
 
 # Python
-__pycache__
+__pycache__/
+**/__pycache__/
 *.py[cod]
+**/*.py[cod]
 *$py.class
+**/*.pyc
+*.pyc
 *.so
 .Python
 env/
@@ -33,3 +37,13 @@ Thumbs.db
 # Documentation
 README.md
 REFACTORING_PLAN.md
+
+# Backup/Copy directories
+repo_push/
+**/repo_push/
+django/
+**/django/
+
+# Defang
+.defang/
+**/.defang/

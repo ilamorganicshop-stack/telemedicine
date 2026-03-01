@@ -6,6 +6,7 @@ Pillow==11.1.0
 psycopg2-binary==2.9.9
 dj-database-url==2.1.0
 requests==2.31.0
+django-redis==5.4.0
 
 # Video Calling Dependencies (WebRTC + Django Channels)
 channels==4.2.0

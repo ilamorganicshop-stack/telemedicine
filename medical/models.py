@@ -185,6 +185,18 @@ class Appointment(models.Model):
         null=True,
         help_text="Reason for rejection by doctor"
     )
+    
+    # Doctor's proposed date/time change fields
+    doctor_proposed_date = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="Doctor's proposed new date/time for the appointment"
+    )
+    doctor_change_requested = models.BooleanField(
+        default=False,
+        help_text="Whether doctor has requested a date/time change"
+    )
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -278,3 +290,41 @@ class ChatMessage(models.Model):
         verbose_name = "Chat Message"
         verbose_name_plural = "Chat Messages"
         ordering = ['created_at']
+
+
+class Notification(models.Model):
+    NOTIFICATION_TYPES = [
+        ('appointment_approved', 'Appointment Approved'),
+        ('appointment_rejected', 'Appointment Rejected'),
+        ('appointment_rescheduled', 'Appointment Rescheduled by Doctor'),
+        ('appointment_requested', 'New Appointment Request'),
+    ]
+    
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='notifications'
+    )
+    notification_type = models.CharField(
+        max_length=50,
+        choices=NOTIFICATION_TYPES
+    )
+    title = models.CharField(max_length=200)
+    message = models.TextField()
+    appointment = models.ForeignKey(
+        Appointment,
+        on_delete=models.CASCADE,
+        related_name='notifications',
+        null=True,
+        blank=True
+    )
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.notification_type} - {self.recipient.username}"
+    
+    class Meta:
+        verbose_name = "Notification"
+        verbose_name_plural = "Notifications"
+        ordering = ['-created_at']

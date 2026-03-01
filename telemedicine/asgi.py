@@ -15,11 +15,14 @@ from channels.auth import AuthMiddlewareStack
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "telemedicine.settings")
 
-# Import routing after Django setup
+# Initialize Django ASGI app before importing modules that touch models.
+django_asgi_app = get_asgi_application()
+
+# Import routing after Django initialization
 import medical.routing
 
 application = ProtocolTypeRouter({
-    "http": get_asgi_application(),
+    "http": django_asgi_app,
     "websocket": AuthMiddlewareStack(
         URLRouter(
             medical.routing.websocket_urlpatterns

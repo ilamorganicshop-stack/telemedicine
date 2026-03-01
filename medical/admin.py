@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Hospital, DoctorProfile, PatientProfile, Appointment, Availability
+from .models import Hospital, DoctorProfile, PatientProfile, Appointment, Availability, Notification
 
 
 @admin.register(Hospital)
@@ -41,3 +41,13 @@ class AvailabilityAdmin(admin.ModelAdmin):
     list_filter = ('day_of_week', 'is_available', 'doctor')
     search_fields = ('doctor__first_name', 'doctor__last_name')
     readonly_fields = ('created_at', 'updated_at')
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ('recipient', 'notification_type', 'title', 'is_read', 'created_at')
+    list_filter = ('notification_type', 'is_read', 'created_at')
+    search_fields = ('recipient__first_name', 'recipient__last_name', 'title', 'message')
+    readonly_fields = ('created_at',)
+    date_hierarchy = 'created_at'
+    ordering = ('-created_at',)

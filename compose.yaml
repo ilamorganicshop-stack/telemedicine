@@ -1,3 +1,5 @@
+x-defang-project: telemedicine-app
+
 services:
   telemedicine:
     build:
@@ -11,8 +13,13 @@ services:
       - SECRET_KEY=${SECRET_KEY:-django-insecure-change-me-in-production}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
       - DATABASE_URL=postgresql://postgres.slbzulmnmdncvkvdgbyy:301197997Mom%40@aws-1-ap-south-1.pooler.supabase.com:6543/postgres
+      - DB_CONN_MAX_AGE=${DB_CONN_MAX_AGE:-600}
+      - DB_CONNECT_TIMEOUT=${DB_CONNECT_TIMEOUT:-10}
+      - REDIS_URL=redis://redis:6379/0
       - KHALTI_PUBLIC_KEY=${KHALTI_PUBLIC_KEY:-117e2f1f48d84b52a47ef8fdf4623f5f}
       - KHALTI_SECRET_KEY=${KHALTI_SECRET_KEY:-1753221752054f0bbed8c345b7dd6b65}
+    depends_on:
+      - redis
 
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/accounts/login/"]
@@ -20,3 +27,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5

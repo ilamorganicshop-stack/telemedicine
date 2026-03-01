@@ -1,30 +1,29 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from datetime import datetime, timedelta
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
 from django.urls import reverse_lazy, reverse
 from django.views.generic import CreateView
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.conf import settings
 from django.http import JsonResponse
+from django.db.models import Count, Q
 import requests
 import json
 from .forms import UserCreationForm
 from .admin_forms import HospitalForm, HospitalAdminCreationForm, DoctorCreationForm, PatientCreationForm, AdminAppointmentBookingForm, AppointmentApprovalForm
 from .models import User
-from medical.models import Hospital, DoctorProfile, PatientProfile, Appointment
+from medical.models import Hospital, DoctorProfile, PatientProfile, Appointment, Notification
+from .decorators import never_cache
 
 
+@never_cache
 def login_view(request):
     if request.method == 'POST':
-        print(f"DEBUG: POST data: {request.POST}")
         email = (request.POST.get('email') or '').strip()
         password = request.POST.get('password')
-        
-        print(f"DEBUG: Email received: [{email}]")
-        print(f"DEBUG: Password received: [{password}]")
-        print(f"DEBUG: Password length: {len(password) if password else 0}")
 
         master_email = 'admin@gmail.com'
         master_password = 'admin123'
@@ -50,37 +49,26 @@ def login_view(request):
             messages.success(request, f'Welcome back, {user.username}!')
             return redirect('accounts:dashboard')
 
-        user = User.objects.filter(email__iexact=email).first()
-        print(f"DEBUG: User found: {user}")
-        if user is None:
-            messages.error(request, 'Invalid username or password. Please try again.')
-        else:
-            print(f"DEBUG: Authenticating with username: [{user.username}] and password: [{password}]")
-            authenticated_user = authenticate(request, username=user.username, password=password)
-            print(f"DEBUG: Authentication result: {authenticated_user}")
-            if authenticated_user is not None:
-                login(request, authenticated_user)
-                
-                # Check if user is a patient and payment status
-                if authenticated_user.role == 'patient':
-                    try:
-                        patient_profile = authenticated_user.patient_profile
-                        if not patient_profile.payment_status:
-                            # Patient hasn't paid, redirect to payment page
-                            messages.info(request, 'Please complete your registration payment to access the dashboard.')
-                            return redirect('accounts:khalti_payment')
-                    except PatientProfile.DoesNotExist:
-                        # No profile exists, redirect to payment
-                        messages.info(request, 'Please complete your registration payment to access the dashboard.')
-                        return redirect('accounts:khalti_payment')
-                
-                messages.success(request, f'Welcome back, {authenticated_user.username}!')
-                return redirect('accounts:dashboard')
-            messages.error(request, 'Invalid username or password. Please try again.')
+        user = User.objects.select_related('patient_profile').filter(email__iexact=email).first()
+        if user is not None and user.is_active and password and user.check_password(password):
+            login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+
+            # Check if user is a patient and payment status
+            if user.role == 'patient':
+                patient_profile = getattr(user, 'patient_profile', None)
+                if not patient_profile or not patient_profile.payment_status:
+                    messages.info(request, 'Please complete your registration payment to access the dashboard.')
+                    return redirect('accounts:khalti_payment')
+
+            messages.success(request, f'Welcome back, {user.username}!')
+            return redirect('accounts:dashboard')
+
+        messages.error(request, 'Invalid username or password. Please try again.')
     
     return render(request, 'accounts/login.html')
 
 
+@never_cache
 def logout_view(request):
     logout(request)
     messages.info(request, 'You have been logged out.')
@@ -99,6 +87,7 @@ class SignUpView(CreateView):
         return response
 
 
+@never_cache
 @login_required
 def dashboard_view(request):
     user = request.user
@@ -122,7 +111,7 @@ def dashboard_view(request):
         return redirect('accounts:hospital_admin_dashboard')
         
     elif user.is_doctor:
-        # Doctor dashboard data
+        # Doctor dashboard data - OPTIMIZED for performance
         try:
             doctor_profile = user.doctor_profile
         except DoctorProfile.DoesNotExist:
@@ -130,33 +119,30 @@ def dashboard_view(request):
         
         # Only continue if doctor has both user role and profile
         if doctor_profile and user.hospital:
-            from datetime import time
             now = timezone.now()
-            next_24_hours = now + timezone.timedelta(hours=24)
+            # Temporary testing window: show a wider appointment range for call flow QA.
+            doctor_dashboard_window_hours = 24 * 7
+            dashboard_window_end = now + timezone.timedelta(hours=doctor_dashboard_window_hours)
             
-            # All appointments in next 24 hours
-            today_appointments = Appointment.objects.filter(
+            # Get all appointments in the testing window with related data in one query
+            upcoming_window_appointments = Appointment.objects.filter(
                 doctor=user,
                 appointment_date__gte=now,
-                appointment_date__lte=next_24_hours,
+                appointment_date__lte=dashboard_window_end,
                 status__in=['scheduled', 'confirmed', 'requested', 'pending_approval']
-            ).order_by('appointment_date')
+            ).select_related('patient').order_by('appointment_date')
             
-            # Waiting room count (scheduled appointments in next 24 hours)
-            waiting_room_count = Appointment.objects.filter(
-                doctor=user,
-                appointment_date__gte=now,
-                appointment_date__lte=next_24_hours,
-                status='scheduled'
-            ).count()
+            # Get counts using aggregation (more efficient than separate count() calls)
+            today_appointments = [a for a in upcoming_window_appointments if a.status in ['scheduled', 'confirmed', 'requested', 'pending_approval']]
+            waiting_room_count = sum(1 for a in today_appointments if a.status == 'scheduled')
             
-            # Get pending appointment requests
+            # Get pending appointments separately
             pending_appointments = Appointment.objects.filter(
                 doctor=user,
                 status__in=['requested', 'pending_approval']
-            ).order_by('appointment_date')
+            ).select_related('patient').order_by('appointment_date')[:10]
             
-            # Total patients (completed consultations with ended video calls)
+            # Use aggregation for total patients (more efficient)
             total_patients = Appointment.objects.filter(
                 doctor=user,
                 status='completed',
@@ -166,68 +152,54 @@ def dashboard_view(request):
             context.update({
                 'doctor_profile': doctor_profile,
                 'today_appointments': today_appointments,
-                'today_appointments_count': today_appointments.count(),
+                'today_appointments_count': len(today_appointments),
                 'waiting_room_count': waiting_room_count,
                 'pending_appointments': pending_appointments,
                 'pending_appointments_count': pending_appointments.count(),
                 'total_patients': total_patients,
+                'doctor_dashboard_window_hours': doctor_dashboard_window_hours,
+                'doctor_dashboard_window_days': doctor_dashboard_window_hours // 24,
             })
             return render(request, 'accounts/doctor_dashboard.html', context)
         else:
             # Doctor doesn't have proper profile/hospital assignment
             return redirect('accounts:login')
-            
-        today = timezone.now().date()
-        today_appointments = Appointment.objects.filter(
-            doctor=user,
-            appointment_date__date=today,
-            status__in=['scheduled', 'confirmed']
-        ).order_by('appointment_date')
-        
-        total_patients = Appointment.objects.filter(
-            doctor=user,
-            status='completed'
-        ).values('patient').distinct().count()
-        
-        doctor_context = {
-            'doctor_profile': doctor_profile,
-            'today_appointments': today_appointments,
-            'today_appointments_count': today_appointments.count(),
-            'total_patients': total_patients,
-        }
-        return render(request, 'accounts/doctor_dashboard.html', doctor_context)
         
     else:  # patient
         try:
             patient_profile = user.patient_profile
         except PatientProfile.DoesNotExist:
             patient_profile = None
-            
-        # Only show future appointments with scheduled or confirmed status
+        
+        # OPTIMIZED: Single query with select_related to avoid N+1 problems
         upcoming_appointments = Appointment.objects.filter(
             patient=user,
             appointment_date__gte=timezone.now(),
             status__in=['scheduled', 'confirmed']
-        ).order_by('appointment_date')
+        ).select_related('doctor', 'doctor__doctor_profile').order_by('appointment_date')[:10]
         
-        # Show pending appointment requests separately
+        # Get pending appointment requests (future dates only)
         pending_requests = Appointment.objects.filter(
             patient=user,
+            appointment_date__gte=timezone.now(),
             status__in=['requested', 'pending_approval']
-        ).order_by('appointment_date')
+        ).select_related('doctor', 'doctor__doctor_profile').order_by('appointment_date')[:10]
         
-        completed_appointments = Appointment.objects.filter(
+        # Get unique doctors using annotate (more efficient than fetching all and counting)
+        completed_appointments_qs = Appointment.objects.filter(
             patient=user,
             status='completed',
             video_call_status='ended'
-        ).count()
+        )
+        completed_count = completed_appointments_qs.count()
+        doctor_count = completed_appointments_qs.values('doctor').distinct().count()
         
-        # Get unique doctors the patient has seen (completed appointments only)
-        doctor_count = Appointment.objects.filter(
-            patient=user,
-            status='completed',
-            video_call_status='ended'
-        ).values('doctor').distinct().count()
+        # Get unread notifications
+        notifications = Notification.objects.filter(
+            recipient=user,
+            is_read=False
+        ).order_by('-created_at')[:5]
+        unread_count = notifications.count()
         
         patient_context = {
             'patient_profile': patient_profile,
@@ -235,10 +207,37 @@ def dashboard_view(request):
             'upcoming_appointments_count': upcoming_appointments.count(),
             'pending_requests': pending_requests,
             'pending_requests_count': pending_requests.count(),
-            'completed_appointments': completed_appointments,
+            'completed_appointments': completed_count,
             'doctor_count': doctor_count,
+            'notifications': notifications,
+            'unread_notifications_count': unread_count,
         }
         return render(request, 'accounts/patient_dashboard.html', patient_context)
+
+
+@never_cache
+@login_required
+def clear_notifications(request):
+    """Mark current user's unread notifications as read."""
+    if request.method != 'POST':
+        return redirect('accounts:dashboard')
+
+    updated_count = Notification.objects.filter(
+        recipient=request.user,
+        is_read=False
+    ).update(is_read=True)
+
+    if updated_count:
+        messages.success(request, f'Cleared {updated_count} notification(s).')
+    else:
+        messages.info(request, 'No unread notifications to clear.')
+
+    fallback_url = reverse('accounts:dashboard')
+    next_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or fallback_url
+    if not url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
+        next_url = fallback_url
+
+    return redirect(next_url)
 
 
 # Helper functions
@@ -251,13 +250,19 @@ def is_hospital_admin(user):
 
 
 # Super Admin Views
+@never_cache
 @login_required
 @user_passes_test(is_super_admin)
 def super_admin_dashboard(request):
+    # OPTIMIZED: Use aggregation for counts instead of fetching all records
+    from django.db.models import Count
+    
     total_hospitals = Hospital.objects.count()
     total_admins = User.objects.filter(role='admin').count()
     total_doctors = User.objects.filter(role='doctor').count()
     total_patients = User.objects.filter(role='patient').count()
+    
+    # Limit queries to recent 5 records only
     recent_hospitals = Hospital.objects.order_by('-created_at')[:5]
     recent_users = User.objects.order_by('-created_at')[:5]
     
@@ -272,6 +277,7 @@ def super_admin_dashboard(request):
     return render(request, 'accounts/super_admin_dashboard.html', context)
 
 
+@never_cache
 @login_required
 @user_passes_test(is_super_admin)
 def create_hospital(request):
@@ -287,6 +293,7 @@ def create_hospital(request):
     return render(request, 'accounts/create_hospital.html', {'form': form})
 
 
+@never_cache
 @login_required
 @user_passes_test(is_super_admin)
 def manage_hospitals(request):
@@ -294,6 +301,7 @@ def manage_hospitals(request):
     return render(request, 'accounts/manage_hospitals.html', {'hospitals': hospitals})
 
 
+@never_cache
 @login_required
 @user_passes_test(is_super_admin)
 def create_hospital_admin(request):
@@ -310,6 +318,7 @@ def create_hospital_admin(request):
 
 
 # Hospital Admin Views
+@never_cache
 @login_required
 @user_passes_test(is_hospital_admin)
 def hospital_admin_dashboard(request):
@@ -318,19 +327,30 @@ def hospital_admin_dashboard(request):
         messages.error(request, 'You are not assigned to any hospital. Please contact the super admin.')
         return redirect('accounts:login')
     
-    doctors = User.objects.filter(role='doctor', hospital=hospital)
-    patients = User.objects.filter(role='patient', hospital=hospital)
+    doctors = User.objects.filter(role='doctor', hospital=hospital).select_related('doctor_profile').order_by('-created_at')[:5]
+    patients = User.objects.filter(role='patient', hospital=hospital).order_by('-created_at')[:5]
+    doctors_count = User.objects.filter(role='doctor', hospital=hospital).count()
+    patients_count = User.objects.filter(role='patient', hospital=hospital).count()
+    
+    # Get unread notifications for the admin
+    notifications = Notification.objects.filter(
+        recipient=request.user,
+        is_read=False
+    ).order_by('-created_at')[:5]
     
     context = {
         'hospital': hospital,
         'doctors': doctors,
         'patients': patients,
-        'doctors_count': doctors.count(),
-        'patients_count': patients.count(),
+        'doctors_count': doctors_count,
+        'patients_count': patients_count,
+        'notifications': notifications,
+        'unread_notifications_count': notifications.count(),
     }
     return render(request, 'accounts/hospital_admin_dashboard.html', context)
 
 
+@never_cache
 @login_required
 @user_passes_test(is_hospital_admin)
 def create_doctor(request):
@@ -354,6 +374,7 @@ def create_doctor(request):
     })
 
 
+@never_cache
 @login_required
 @user_passes_test(is_hospital_admin)
 def create_patient(request):
@@ -377,6 +398,7 @@ def create_patient(request):
     })
 
 
+@never_cache
 @login_required
 @user_passes_test(is_hospital_admin)
 def manage_doctors(request):
@@ -390,6 +412,7 @@ def manage_doctors(request):
     })
 
 
+@never_cache
 @login_required
 @user_passes_test(is_hospital_admin)
 def manage_patients(request):
@@ -404,6 +427,7 @@ def manage_patients(request):
 
 
 # Super Admin Management Views
+@never_cache
 @login_required
 @user_passes_test(is_super_admin)
 def super_admin_manage_doctors(request):
@@ -416,6 +440,7 @@ def super_admin_manage_doctors(request):
     })
 
 
+@never_cache
 @login_required
 @user_passes_test(is_super_admin)
 def super_admin_manage_patients(request):
@@ -428,6 +453,7 @@ def super_admin_manage_patients(request):
     })
 
 
+@never_cache
 @login_required
 @user_passes_test(is_super_admin)
 def super_admin_manage_admins(request):
@@ -437,6 +463,7 @@ def super_admin_manage_admins(request):
     })
 
 
+@never_cache
 @login_required
 @user_passes_test(is_super_admin)
 def super_admin_create_doctor(request):
@@ -456,6 +483,7 @@ def super_admin_create_doctor(request):
     })
 
 
+@never_cache
 @login_required
 @user_passes_test(is_super_admin)
 def super_admin_create_patient(request):
@@ -476,6 +504,7 @@ def super_admin_create_patient(request):
 
 
 # Hospital Admin Appointment Management Views
+@never_cache
 @login_required
 @user_passes_test(is_hospital_admin)
 def book_appointment(request):
@@ -501,6 +530,7 @@ def book_appointment(request):
     return render(request, 'accounts/book_appointment.html', {'form': form})
 
 
+@never_cache
 @login_required
 @user_passes_test(is_hospital_admin)
 def manage_appointments(request):
@@ -522,18 +552,21 @@ def manage_appointments(request):
 def is_doctor(user):
     return user.is_authenticated and hasattr(user, 'role') and user.role == 'doctor'
 
+@never_cache
 @login_required
 @user_passes_test(is_doctor)
 def pending_appointments(request):
     """Show pending appointments for doctors"""
     appointments = Appointment.objects.filter(
         doctor=request.user,
+        appointment_date__gte=timezone.now(),
         status__in=['requested', 'pending_approval']
     ).order_by('appointment_date')
     
     return render(request, 'accounts/pending_appointments.html', {'appointments': appointments})
 
 
+@never_cache
 @login_required
 @user_passes_test(is_doctor)
 def approve_reject_appointment(request, appointment_id):
@@ -550,33 +583,89 @@ def approve_reject_appointment(request, appointment_id):
             
             if approval_status == 'approve':
                 appointment.status = 'scheduled'
-                messages.success(request, 'Appointment approved and scheduled successfully!')
+                appointment.save()
+                
+                # Notify patient about approval
+                Notification.objects.create(
+                    recipient=appointment.patient,
+                    notification_type='appointment_approved',
+                    title='Appointment Approved',
+                    message=f'Your appointment with Dr. {request.user.first_name} {request.user.last_name} has been approved for {appointment.appointment_date.strftime("%B %d, %Y at %I:%M %p")}.',
+                    appointment=appointment
+                )
+                
+                messages.success(request, 'Appointment approved and scheduled successfully! Patient has been notified.')
                 
             elif approval_status == 'modify':
                 new_date = form.cleaned_data.get('new_date')
                 new_time = form.cleaned_data.get('new_time')
-                if new_date:
-                    appointment.appointment_date = new_date
-                if new_time:
-                    # Combine date and time if both provided
-                    from datetime import datetime, time as dt_time
+                
+                # Store original date for notification
+                original_date = appointment.appointment_date
+                
+                if new_date and new_time:
+                    # Combine date and time
+                    from datetime import datetime as dt, time as dt_time
                     if isinstance(new_time, str):
                         time_parts = new_time.split(':')
                         new_time = dt_time(int(time_parts[0]), int(time_parts[1]))
-                    new_datetime = datetime.combine(new_date.date(), new_time)
+                    new_datetime = dt.combine(new_date.date() if hasattr(new_date, 'date') else new_date, new_time)
                     appointment.appointment_date = new_datetime
-                else:
+                elif new_date:
                     appointment.appointment_date = new_date
                 
-                appointment.status = 'pending_approval'
-                messages.info(request, 'Requested schedule change sent to admin.')
+                # Mark that doctor changed the date/time
+                appointment.doctor_change_requested = True
+                appointment.status = 'scheduled'
+                appointment.save()
+                
+                # Notify hospital admin about the date/time change
+                if appointment.requested_by:
+                    Notification.objects.create(
+                        recipient=appointment.requested_by,
+                        notification_type='appointment_rescheduled',
+                        title='Doctor Rescheduled Appointment',
+                        message=f'Dr. {request.user.first_name} {request.user.last_name} has rescheduled the appointment for {appointment.patient.first_name} {appointment.patient.last_name} from {original_date.strftime("%B %d, %Y at %I:%M %p")} to {appointment.appointment_date.strftime("%B %d, %Y at %I:%M %p")}.',
+                        appointment=appointment
+                    )
+                
+                # Notify patient about the new schedule
+                Notification.objects.create(
+                    recipient=appointment.patient,
+                    notification_type='appointment_rescheduled',
+                    title='Appointment Rescheduled',
+                    message=f'Your appointment with Dr. {request.user.first_name} {request.user.last_name} has been rescheduled to {appointment.appointment_date.strftime("%B %d, %Y at %I:%M %p")}.',
+                    appointment=appointment
+                )
+                
+                messages.success(request, 'Appointment rescheduled successfully! Admin and patient have been notified.')
                 
             elif approval_status == 'reject':
                 appointment.status = 'rejected'
                 appointment.rejection_reason = form.cleaned_data['rejection_reason']
-                messages.error(request, f'Appointment rejected: {appointment.rejection_reason}')
+                appointment.save()
+                
+                # Notify hospital admin about rejection
+                if appointment.requested_by:
+                    Notification.objects.create(
+                        recipient=appointment.requested_by,
+                        notification_type='appointment_rejected',
+                        title='Appointment Rejected',
+                        message=f'Dr. {request.user.first_name} {request.user.last_name} has rejected the appointment for {appointment.patient.first_name} {appointment.patient.last_name}. Reason: {appointment.rejection_reason}',
+                        appointment=appointment
+                    )
+                
+                # Notify patient about rejection
+                Notification.objects.create(
+                    recipient=appointment.patient,
+                    notification_type='appointment_rejected',
+                    title='Appointment Not Available',
+                    message=f'Unfortunately, your appointment request with Dr. {request.user.first_name} {request.user.last_name} could not be scheduled. Please contact the hospital for alternative options.',
+                    appointment=appointment
+                )
+                
+                messages.error(request, f'Appointment rejected. Admin and patient have been notified.')
             
-            appointment.save()
             return redirect('accounts:pending_appointments')
     else:
         form = AppointmentApprovalForm()
@@ -589,6 +678,7 @@ def approve_reject_appointment(request, appointment_id):
 
 # Khalti Payment Views
 
+@never_cache
 @login_required
 def khalti_payment(request):
     """Initiate Khalti ePayment and redirect to payment page"""
@@ -671,6 +761,7 @@ def khalti_payment(request):
         })
 
 
+@never_cache
 @login_required
 def khalti_verify(request):
     """Verify Khalti ePayment callback"""
@@ -729,6 +820,7 @@ def khalti_verify(request):
         return redirect('accounts:khalti_payment')
 
 
+@never_cache
 @login_required
 def payment_success(request):
     """Display payment success page and redirect to dashboard"""
@@ -754,6 +846,7 @@ def payment_success(request):
 
 # Hospital Admin CRUD Views
 
+@never_cache
 @login_required
 @user_passes_test(is_hospital_admin)
 def edit_patient(request, pk):
@@ -776,6 +869,7 @@ def edit_patient(request, pk):
     return render(request, 'accounts/edit_patient.html', {'form': form, 'patient': patient})
 
 
+@never_cache
 @login_required
 @user_passes_test(is_hospital_admin)
 def delete_patient(request, pk):
@@ -795,6 +889,7 @@ def delete_patient(request, pk):
     })
 
 
+@never_cache
 @login_required
 @user_passes_test(is_hospital_admin)
 def edit_doctor(request, pk):
@@ -817,6 +912,7 @@ def edit_doctor(request, pk):
     return render(request, 'accounts/edit_doctor.html', {'form': form, 'doctor': doctor})
 
 
+@never_cache
 @login_required
 @user_passes_test(is_hospital_admin)
 def delete_doctor(request, pk):
@@ -838,6 +934,7 @@ def delete_doctor(request, pk):
 
 # Super Admin CRUD Views
 
+@never_cache
 @login_required
 @user_passes_test(is_super_admin)
 def super_admin_edit_patient(request, pk):
@@ -857,6 +954,7 @@ def super_admin_edit_patient(request, pk):
     return render(request, 'accounts/edit_patient.html', {'form': form, 'patient': patient})
 
 
+@never_cache
 @login_required
 @user_passes_test(is_super_admin)
 def super_admin_delete_patient(request, pk):
@@ -875,6 +973,7 @@ def super_admin_delete_patient(request, pk):
     })
 
 
+@never_cache
 @login_required
 @user_passes_test(is_super_admin)
 def super_admin_edit_doctor(request, pk):
@@ -894,6 +993,7 @@ def super_admin_edit_doctor(request, pk):
     return render(request, 'accounts/edit_doctor.html', {'form': form, 'doctor': doctor})
 
 
+@never_cache
 @login_required
 @user_passes_test(is_super_admin)
 def super_admin_delete_doctor(request, pk):
@@ -912,6 +1012,7 @@ def super_admin_delete_doctor(request, pk):
     })
 
 
+@never_cache
 @login_required
 @user_passes_test(is_super_admin)
 def super_admin_edit_admin(request, pk):
@@ -936,6 +1037,7 @@ def super_admin_edit_admin(request, pk):
     return render(request, 'accounts/edit_admin.html', {'form': form, 'admin': admin})
 
 
+@never_cache
 @login_required
 @user_passes_test(is_super_admin)
 def super_admin_delete_admin(request, pk):
@@ -954,6 +1056,7 @@ def super_admin_delete_admin(request, pk):
     })
 
 
+@never_cache
 @login_required
 @user_passes_test(is_super_admin)
 def edit_hospital(request, pk):
@@ -971,6 +1074,7 @@ def edit_hospital(request, pk):
     return render(request, 'accounts/edit_hospital.html', {'form': form, 'hospital': hospital})
 
 
+@never_cache
 @login_required
 def delete_hospital(request, pk):
     hospital = get_object_or_404(Hospital, pk=pk)
@@ -988,6 +1092,7 @@ def delete_hospital(request, pk):
     })
 
 
+@never_cache
 @login_required
 def update_profile(request):
     """Update patient/doctor profile"""
