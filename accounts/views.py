@@ -79,12 +79,14 @@ class SignUpView(CreateView):
     model = User
     form_class = UserCreationForm
     template_name = 'accounts/signup.html'
-    success_url = reverse_lazy('login')
-    
+    success_url = reverse_lazy('accounts:login')
+
     def form_valid(self, form):
         response = super().form_valid(form)
-        messages.success(self, 'Account created successfully! Please log in.')
-        return response
+        user = self.object
+        login(self.request, user)
+        messages.info(self.request, 'Account created! Please complete your payment to access the dashboard.')
+        return redirect('accounts:khalti_payment')
 
 
 @never_cache
