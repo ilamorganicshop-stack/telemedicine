@@ -92,20 +92,14 @@ ASGI_APPLICATION = "telemedicine.asgi.application"  # Django Channels ASGI
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
-DB_CONN_MAX_AGE = int(os.environ.get("DB_CONN_MAX_AGE", "600"))
-DB_CONNECT_TIMEOUT = int(os.environ.get("DB_CONNECT_TIMEOUT", "10"))
 
 if DATABASE_URL:
     DATABASES = {
         "default": dj_database_url.parse(
             DATABASE_URL,
-            conn_max_age=DB_CONN_MAX_AGE,
-            conn_health_checks=True,
-            ssl_require=not DEBUG,
+            conn_max_age=0,  # No persistent connections - required for Supabase pooler
         )
     }
-    DATABASES["default"].setdefault("OPTIONS", {})
-    DATABASES["default"]["OPTIONS"]["connect_timeout"] = DB_CONNECT_TIMEOUT
 else:
     DATABASES = {
         "default": {
